@@ -264,8 +264,10 @@ function rowHtml(t) {
   <div class="all-row" data-addr="${esc(t.addr)}">
     ${unread}
     <div class="avatar" style="background:${avatarColor(t.addr)}">${esc(initials(t.name))}</div>
-    <div class="r-name">${esc(t.name)}</div>
-    <div class="r-addr">${esc(t.addr)}</div>
+    <div class="r-main">
+      <div class="r-name">${esc(t.name)}</div>
+      <div class="r-addr">${esc(t.addr)}</div>
+    </div>
     <div class="r-date">${fmtDate(t.latest)}</div>
   </div>`;
 }
