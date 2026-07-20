@@ -244,14 +244,14 @@ function tileHtml(t) {
 }
 
 function rowHtml(t) {
-  const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "";
+  const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "<span></span>";
   return `
   <div class="all-row" data-addr="${esc(t.addr)}">
+    ${unread}
     <div class="avatar" style="background:${avatarColor(t.addr)}">${esc(initials(t.name))}</div>
     <div class="r-name">${esc(t.name)}</div>
     <div class="r-addr">${esc(t.addr)}</div>
     <div class="r-date">${fmtDate(t.latest)}</div>
-    ${unread || "<span></span>"}
   </div>`;
 }
 
