@@ -417,3 +417,36 @@ class MailStore(object):
             self._save_cache()
         skipped = len(keys) - len(movable_id) - len(movable_rfc)
         return {"moved": moved, "failed": failed, "skipped": skipped}
+
+    def move_to_junk(self, keys):
+        """指定メッセージを各アカウント自身の迷惑メールフォルダへ移動する。"""
+        args = []
+        movable = []
+        acct_map = self.load_account_map()
+        with self.lock:
+            for k in keys:
+                m = self.messages.get(k)
+                if not m:
+                    continue
+                if m.get("id") is not None:
+                    args += [m["account"], m["mailbox"], "id", m["id"]]
+                    movable.append(k)
+                elif m.get("rfcId"):
+                    acct_name = acct_map.get(m.get("account", ""), m.get("account", ""))
+                    args += [acct_name, "INBOX", "mid", m["rfcId"]]
+                    movable.append(k)
+        if not movable:
+            return {"moved": 0, "failed": 0, "skipped": len(keys)}
+        out = run_osascript("move_to_junk.applescript", args, timeout=900)
+        moved, failed = [int(x) for x in out.split(",")]
+        if moved:
+            with self.lock:
+                for k in movable:
+                    self.messages.pop(k, None)
+            self._save_cache()
+        return {"moved": moved, "failed": failed, "skipped": len(keys) - len(movable)}
+
+    def keys_by_sender(self, addr):
+        addr = (addr or "").lower()
+        with self.lock:
+            return [k for k, m in self.messages.items() if m.get("senderAddr") == addr]

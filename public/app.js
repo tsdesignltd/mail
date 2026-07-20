@@ -358,8 +358,16 @@ $("#pinBtn").addEventListener("click", async () => {
 
 $("#blockBtn").addEventListener("click", async () => {
   if (!state.activeSender) return;
-  await post("/api/spam/block", { sender: state.activeSender });
-  toast("ブロックしました。今後この差出人は迷惑候補になります");
+  $("#blockBtn").disabled = true;
+  try {
+    const r = await post("/api/spam/block", { sender: state.activeSender });
+    let msg = "ブロックしました。";
+    if (r.moved) msg += `受信済みの ${r.moved} 件を迷惑メールフォルダへ移動しました。`;
+    if (r.failed) msg += `(${r.failed} 件は移動できませんでした)`;
+    toast(msg);
+  } finally {
+    $("#blockBtn").disabled = false;
+  }
   $("#threadOverlay").classList.add("hidden");
   loadOverview();
 });

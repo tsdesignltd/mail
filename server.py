@@ -293,10 +293,21 @@ class Handler(BaseHTTPRequestHandler):
 
         if u.path == "/api/spam/block":
             addr = body.get("sender", "")
-            if addr and addr not in settings["blockedSenders"]:
+            if not addr:
+                return self._json({"error": "sender required"}, 400)
+            if addr not in settings["blockedSenders"]:
                 settings["blockedSenders"].append(addr)
                 save_settings(settings)
-            return self._json({"ok": True})
+            # その差出人の受信済みメールを、各アカウントの迷惑メールフォルダへ移動
+            keys = store.keys_by_sender(addr)
+            result = {"moved": 0, "failed": 0, "skipped": 0}
+            if keys:
+                try:
+                    result = store.move_to_junk(keys)
+                except Exception as e:
+                    result = {"moved": 0, "failed": len(keys), "skipped": 0, "error": str(e)}
+            result["ok"] = True
+            return self._json(result)
 
         if u.path == "/api/spam/ai":
             return self._json(ai_judge(body.get("keys", [])))

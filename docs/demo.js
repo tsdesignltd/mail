@@ -125,7 +125,9 @@
     if (path.startsWith("/api/spam/block")) {
       const a = body.sender;
       if (a && !settings.blockedSenders.includes(a)) settings.blockedSenders.push(a);
-      return json({ ok: true });
+      const n = messages.filter((m) => m.senderAddr === a).length;
+      messages = messages.filter((m) => m.senderAddr !== a);
+      return json({ ok: true, moved: n, failed: 0, skipped: 0 });
     }
     if (path.startsWith("/api/spam/ai")) return json({ available: false });
     if (path.startsWith("/api/favorites")) {
