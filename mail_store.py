@@ -184,8 +184,9 @@ class MailStore(object):
             v += APPLE_EPOCH_OFFSET
         return datetime.fromtimestamp(v).strftime("%Y-%m-%dT%H:%M:%S")
 
-    def sync_sqlite(self, limit=3000):
+    def sync_sqlite(self, limit=3000, excluded=None):
         """Envelope Index から直近 limit 件 + 送信履歴を読む。"""
+        excluded = set(excluded or [])
         st = self.status
         with st.lock:
             st.running = True
@@ -244,6 +245,8 @@ class MailStore(object):
                     continue
                 d = self._convert_date(r["date_"])
                 if d and d < cutoff_iso:
+                    continue
+                if self._account_from_url(url) in excluded:
                     continue
                 addr = (r["sender_addr"] or "").lower()
                 name = r["sender_name"] or addr or "(不明)"
@@ -325,7 +328,8 @@ class MailStore(object):
         return "local"
 
     # ---------- AppleScript (フォールバック) ----------
-    def sync_applescript(self, per_account_limit=100):
+    def sync_applescript(self, per_account_limit=100, excluded=None):
+        excluded = set(excluded or [])
         st = self.status
         with st.lock:
             st.running = True
@@ -342,6 +346,11 @@ class MailStore(object):
                 parts = rec.split(FIELD_SEP)
                 if len(parts) == 3:
                     accounts.append({"name": parts[0], "mailbox": parts[1], "count": int(parts[2])})
+            # 設定画面用に全アカウント名を保存してから、除外分を落とす
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(os.path.join(DATA_DIR, "accounts.json"), "w", encoding="utf-8") as f:
+                json.dump({a["name"]: a["name"] for a in accounts}, f, ensure_ascii=False)
+            accounts = [a for a in accounts if a["name"] not in excluded]
             with st.lock:
                 st.total_accounts = len(accounts)
 
@@ -440,14 +449,16 @@ class MailStore(object):
                 }
 
     # ---------- 共通操作 ----------
-    def sync(self, per_account_limit=100):
+    def sync(self, per_account_limit=100, excluded=None):
         if self.status.running:
             return False
+        excluded = set(excluded or [])
         if self.sqlite_available():
-            t = threading.Thread(target=self.sync_sqlite, daemon=True)
+            t = threading.Thread(target=self.sync_sqlite,
+                                 kwargs={"excluded": excluded}, daemon=True)
         else:
             t = threading.Thread(target=self.sync_applescript,
-                                 args=(per_account_limit,), daemon=True)
+                                 args=(per_account_limit, excluded), daemon=True)
         t.start()
         return True
 

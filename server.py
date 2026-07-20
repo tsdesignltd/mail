@@ -31,6 +31,7 @@ DEFAULT_SETTINGS = {
     "dismissedFavorites": [],   # 自動追加を拒否した相手
     "autoFavorite": True,
     "perAccountLimit": 300,  # 1アカウントの最大取得件数 (過去1ヶ月分の安全上限)
+    "excludedAccounts": [],  # 同期対象から外すアカウント
 }
 
 store = MailStore()
@@ -86,7 +87,9 @@ def apply_restored_senders(settings):
 def build_overview():
     """UI 用のまとめ: 差出人別スレッド・迷惑候補・よく使う相手。"""
     settings = apply_restored_senders(load_settings())
-    messages = store.all_messages()
+    excluded = set(settings.get("excludedAccounts", []))
+    messages = [m for m in store.all_messages()
+                if m.get("account") not in excluded]
     sender_stats = rules.build_sender_stats(messages, store.replied_to)
 
     judged = []
@@ -144,6 +147,8 @@ def build_overview():
     grey = [m for m in judged if m["spamClass"] == "grey"]
 
     accounts = sorted({m.get("account") for m in judged if m.get("account")})
+    # 設定画面用: Mail.app に存在する全アカウント (未同期・除外中も含む)
+    all_accounts = sorted(set(store.load_account_map().keys()) | set(accounts) | excluded)
 
     return {
         "threads": thread_list,
@@ -151,6 +156,7 @@ def build_overview():
         "spam": spam,
         "grey": grey,
         "accounts": accounts,
+        "allAccounts": all_accounts,
         "totalMessages": len(judged),
         "settings": settings,
         "sync": store.status.snapshot(),
@@ -285,7 +291,8 @@ class Handler(BaseHTTPRequestHandler):
         settings = load_settings()
 
         if u.path == "/api/sync":
-            started = store.sync(per_account_limit=int(settings.get("perAccountLimit", 100)))
+            started = store.sync(per_account_limit=int(settings.get("perAccountLimit", 300)),
+                                 excluded=settings.get("excludedAccounts", []))
             return self._json({"started": started, "status": store.status.snapshot()})
 
         if u.path == "/api/spam/move":

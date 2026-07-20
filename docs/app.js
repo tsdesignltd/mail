@@ -513,6 +513,27 @@ function renderSettings() {
   $("#modeInfo").textContent = ov.fastMode
     ? "高速モード: Mail のローカルデータベースを直接読んでいます。"
     : "AppleScriptモード: Mail.app 経由で取得しています。高速化するには README の手順でフルディスクアクセスを許可してください。";
+  // 同期対象アカウントのON/OFF
+  const excluded = new Set(s.excludedAccounts || []);
+  const allAccts = ov.allAccounts || ov.accounts || [];
+  $("#accountToggles").innerHTML = allAccts.length
+    ? allAccts.map((a) => `
+      <label class="chip acct-toggle">
+        <input type="checkbox" data-acct="${esc(a)}" ${excluded.has(a) ? "" : "checked"}>
+        ${esc(a)}
+      </label>`).join("")
+    : `<span class="hint">同期するとアカウント一覧が表示されます</span>`;
+  $$("#accountToggles input").forEach((c) =>
+    c.addEventListener("change", async () => {
+      const ex = new Set(state.overview.settings.excludedAccounts || []);
+      if (c.checked) ex.delete(c.dataset.acct);
+      else ex.add(c.dataset.acct);
+      await post("/api/settings", { excludedAccounts: [...ex] });
+      toast(c.checked ? `${c.dataset.acct} を同期対象に戻しました`
+                      : `${c.dataset.acct} を同期対象から外しました`);
+      loadOverview();
+    }));
+
   $("#trustCount").textContent = `${(s.trustedSenders || []).length} 件`;
   $("#blockCount").textContent = `${(s.blockedSenders || []).length} 件`;
   $("#trustList").innerHTML = (s.trustedSenders || []).map((a) => chipHtml(a, "trustedSenders")).join("") || `<span class="hint">まだありません</span>`;
