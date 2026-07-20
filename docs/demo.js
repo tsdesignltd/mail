@@ -86,7 +86,7 @@
       totalMessages: judged.length, settings,
       accounts: [...new Set(messages.map((m) => m.account))].sort(),
       sync: { running: false, mode: "demo", progress: "", lastSync: d(0, 8, 0), error: null },
-      fastMode: false, aiAvailable: false, spamMailbox: "MailDeck迷惑候補",
+      fastMode: false, aiAvailable: false, spamMailbox: "各アカウントの迷惑メールフォルダ",
     };
   }
 

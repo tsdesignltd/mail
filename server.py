@@ -137,7 +137,7 @@ def build_overview():
         "sync": store.status.snapshot(),
         "fastMode": store.sqlite_available(),
         "aiAvailable": claude_cli() is not None,
-        "spamMailbox": SPAM_MAILBOX,
+        "spamMailbox": "各アカウントの迷惑メールフォルダ",
     }
 
 
@@ -270,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if u.path == "/api/spam/move":
             keys = body.get("keys", [])
-            result = store.move_messages(keys, SPAM_MAILBOX)
+            result = store.move_to_junk(keys)
             # 仕訳した差出人はブロックリストに学習させる
             if body.get("block", True):
                 addrs = set(body.get("senders", []))
