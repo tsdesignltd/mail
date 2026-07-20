@@ -224,6 +224,18 @@ function renderDash() {
     el.addEventListener("click", () => openThread(el.dataset.addr));
   });
 
+  // ✕ でよく使う相手から外す (タイルのクリックとは分離)
+  $$("#favTiles .tile-x").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await post("/api/favorites", { sender: btn.dataset.addr, action: btn.dataset.action });
+      toast(btn.dataset.action === "dismiss"
+        ? "外しました。この相手は今後自動追加されません"
+        : "よく使う相手から外しました");
+      loadOverview();
+    });
+  });
+
   const spamTotal = ov.spam.length + ov.grey.length;
   const badge = $("#spamBadge");
   badge.classList.toggle("hidden", spamTotal === 0);
@@ -233,8 +245,11 @@ function renderDash() {
 function tileHtml(t) {
   const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "";
   const auto = t.auto ? `<span class="auto-mark">自動</span>` : "";
+  // 手動追加は unpin、自動追加は dismiss (以後自動追加もしない)
+  const action = t.auto ? "dismiss" : "unpin";
   return `
   <div class="tile" data-addr="${esc(t.addr)}">
+    <button class="tile-x" data-addr="${esc(t.addr)}" data-action="${action}" title="よく使う相手から外す">✕</button>
     ${unread}
     <div class="avatar" style="background:${avatarColor(t.addr)}">${esc(initials(t.name))}</div>
     <div class="tile-name">${esc(t.name)} ${auto}</div>

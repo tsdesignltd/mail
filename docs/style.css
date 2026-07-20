@@ -111,6 +111,16 @@ body {
 .tile-sub { color: var(--muted); font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile-date { color: var(--muted); font-size: 11px; }
 .tile .unread-dot { position: absolute; top: 10px; right: 10px; font-size: 12px; padding: 2px 8px; }
+.tile-x {
+  position: absolute; top: 8px; left: 8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  font-size: 11px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.55; transition: opacity 0.1s;
+}
+.tile:hover .tile-x { opacity: 1; }
+.tile-x:hover { color: var(--danger); border-color: var(--danger); }
 .tile .auto-mark { color: var(--warn); font-size: 10.5px; font-weight: 400; }
 .tile-empty { color: var(--muted); font-size: 12.5px; padding: 14px 4px; grid-column: 1 / -1; line-height: 1.7; }
 
