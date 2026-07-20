@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "maildeck",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["server.py"],
+      "cwd": "/Users/main/TSDESIGN Dropbox/AI_WORK/claude/maildeck",
+      "port": 8765
+    }
+  ]
+}

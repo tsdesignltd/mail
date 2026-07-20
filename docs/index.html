@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MailDeck</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="logo">📮 MailDeck</div>
+    <nav id="tabs">
+      <button class="tab active" data-tab="inbox">受信</button>
+      <button class="tab" data-tab="spam">迷惑候補 <span id="spamBadge" class="badge hidden">0</span></button>
+      <button class="tab" data-tab="settings">設定</button>
+    </nav>
+    <div class="topbar-right">
+      <span id="syncStatus" class="sync-status"></span>
+      <button id="syncBtn" class="btn primary">同期</button>
+    </div>
+  </header>
+
+  <!-- 受信タブ: メッセンジャー風 -->
+  <main id="view-inbox" class="view">
+    <aside id="senderList">
+      <div class="search-box"><input id="senderSearch" type="search" placeholder="差出人を検索"></div>
+      <div id="favSection">
+        <div class="section-title">★ よく使う相手</div>
+        <div id="favList"></div>
+      </div>
+      <div class="section-title">すべての差出人</div>
+      <div id="threadList"></div>
+    </aside>
+    <section id="threadPane">
+      <div id="threadEmpty" class="empty-state">
+        <div class="empty-icon">💬</div>
+        <p>差出人を選ぶと、その相手とのメールが<br>会話形式で表示されます</p>
+      </div>
+      <div id="threadView" class="hidden">
+        <div id="threadHeader">
+          <div class="thread-title">
+            <div id="threadName"></div>
+            <div id="threadAddr"></div>
+          </div>
+          <div class="thread-actions">
+            <button id="pinBtn" class="btn small">★ よく使う相手に追加</button>
+            <button id="blockBtn" class="btn small danger">⛔ ブロック</button>
+          </div>
+        </div>
+        <div id="bubbles"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 迷惑候補タブ -->
+  <main id="view-spam" class="view hidden">
+    <div class="spam-wrap">
+      <div class="spam-toolbar">
+        <label><input type="checkbox" id="checkAllSpam"> 高確度をすべて選択</label>
+        <button id="moveSpamBtn" class="btn danger">選択したメールを「<span class="mbname"></span>」へ仕訳</button>
+        <button id="aiJudgeBtn" class="btn hidden">🤖 グレーゾーンをAI判定</button>
+      </div>
+      <h2>迷惑メール(高確度) <span id="spamCount" class="count"></span></h2>
+      <div id="spamItems" class="mail-items"></div>
+      <h2>グレーゾーン(要確認) <span id="greyCount" class="count"></span></h2>
+      <p class="hint">判断に迷うメールです。「迷惑」にすると差出人がブロックリストに、「問題なし」にすると信頼リストに学習されます。</p>
+      <div id="greyItems" class="mail-items"></div>
+    </div>
+  </main>
+
+  <!-- 設定タブ -->
+  <main id="view-settings" class="view hidden">
+    <div class="settings-wrap">
+      <h2>設定</h2>
+      <div class="setting-row">
+        <label><input type="checkbox" id="autoFavToggle"> 重要な差出人を自動で「よく使う相手」に追加する</label>
+      </div>
+      <div class="setting-row">
+        <label>同期時に各アカウントから取得する件数:
+          <select id="limitSelect">
+            <option value="50">50件</option>
+            <option value="100">100件</option>
+            <option value="200">200件</option>
+            <option value="300">300件</option>
+          </select>
+        </label>
+        <p class="hint">AppleScriptモードでは件数が多いほど同期に時間がかかります。</p>
+      </div>
+      <div class="setting-row">
+        <h3>動作モード</h3>
+        <p id="modeInfo" class="hint"></p>
+      </div>
+      <div class="setting-row">
+        <h3>信頼済みの差出人 <span class="count" id="trustCount"></span></h3>
+        <div id="trustList" class="chip-list"></div>
+      </div>
+      <div class="setting-row">
+        <h3>ブロック済みの差出人 <span class="count" id="blockCount"></span></h3>
+        <div id="blockList" class="chip-list"></div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="demo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
