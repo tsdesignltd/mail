@@ -47,7 +47,8 @@ body {
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-.logo { font-weight: 700; font-size: 16px; }
+.logo { font-weight: 700; font-size: 16px; cursor: pointer; user-select: none; }
+.logo:hover { opacity: 0.75; }
 #tabs { display: flex; gap: 4px; flex: 1; }
 .tab {
   border: none; background: transparent; color: var(--muted);

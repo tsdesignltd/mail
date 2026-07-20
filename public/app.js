@@ -273,11 +273,19 @@ function openThread(addr) {
   $("#threadOverlay").classList.remove("hidden");
   renderThread(addr);
 }
-$("#backBtn").addEventListener("click", () => {
+function backToList() {
   $("#threadOverlay").classList.add("hidden");
   state.activeSender = null;
+  // 受信タブに戻す
+  state.tab = "inbox";
+  $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "inbox"));
+  ["inbox", "spam", "settings"].forEach((t) => {
+    $("#view-" + t).classList.toggle("hidden", t !== "inbox");
+  });
   renderDash();
-});
+}
+$("#backBtn").addEventListener("click", backToList);
+$(".logo").addEventListener("click", backToList);
 
 function renderThread(addr) {
   const ov = state.overview;
