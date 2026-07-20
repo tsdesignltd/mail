@@ -1,9 +1,12 @@
-/* MailDeck フロントエンド */
+/* MailDeck フロントエンド — サムネイルタイル型ダッシュボード */
 "use strict";
 
 let state = {
   overview: null,
+  account: "all",     // アカウント切替 ("all" or アカウント名)
   activeSender: null,
+  sortKey: "latest",  // 全員リストの並び: latest | name | addr
+  sortDir: -1,        // -1: 降順, 1: 昇順
   tab: "inbox",
   syncTimer: null,
 };
@@ -31,10 +34,9 @@ function fmtDate(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return "";
   const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  if (sameDay) return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-  if (d.getFullYear() === now.getFullYear())
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+  if (d.toDateString() === now.toDateString())
+    return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}/${d.getDate()}`;
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 function fmtDay(iso) {
@@ -76,16 +78,65 @@ $$(".tab").forEach((btn) => {
   });
 });
 
+/* ---------- アカウントフィルタとグルーピング ---------- */
+function filteredMessages() {
+  const ov = state.overview;
+  if (!ov) return [];
+  const msgs = [];
+  for (const t of ov.threads) {
+    for (const m of t.messages) {
+      if (state.account === "all" || m.account === state.account) msgs.push(m);
+    }
+  }
+  return msgs;
+}
+
+function buildThreads(msgs) {
+  const threads = {};
+  for (const m of msgs) {
+    const t = threads[m.senderAddr] || (threads[m.senderAddr] = {
+      addr: m.senderAddr, name: m.senderName,
+      unread: 0, count: 0, latest: "", latestSubject: "", messages: [],
+    });
+    t.count++;
+    if (!m.read) t.unread++;
+    if ((m.date || "") > t.latest) {
+      t.latest = m.date || "";
+      t.latestSubject = m.subject || "";
+      t.name = m.senderName;
+    }
+    t.messages.push(m);
+  }
+  return threads;
+}
+
 /* ---------- data load ---------- */
 async function loadOverview() {
   const ov = await api("/api/overview");
   state.overview = ov;
-  renderSenderList();
+  renderAccountSelect();
+  renderDash();
   renderSpam();
   renderSettings();
   renderSyncStatus(ov.sync);
-  if (state.activeSender) renderThread(state.activeSender);
+  if (state.activeSender && !$("#threadOverlay").classList.contains("hidden")) {
+    renderThread(state.activeSender);
+  }
 }
+
+function renderAccountSelect() {
+  const ov = state.overview;
+  const sel = $("#accountSelect");
+  const accounts = ov.accounts || [];
+  const cur = state.account;
+  sel.innerHTML = `<option value="all">すべてのアカウント</option>` +
+    accounts.map((a) => `<option value="${esc(a)}" ${a === cur ? "selected" : ""}>${esc(a)}</option>`).join("");
+  sel.value = accounts.includes(cur) ? cur : "all";
+}
+$("#accountSelect").addEventListener("change", (e) => {
+  state.account = e.target.value;
+  renderDash();
+});
 
 function renderSyncStatus(sync) {
   const el = $("#syncStatus");
@@ -118,46 +169,59 @@ $("#syncBtn").addEventListener("click", async () => {
   renderSyncStatus(r.status);
 });
 
-/* ---------- sender list ---------- */
-function senderItemHtml(t, isFav) {
-  const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "";
-  const auto = t.auto ? ` <span class="auto-mark">自動</span>` : "";
-  const sub = isFav ? esc(t.addr) : esc(t.latestSubject || t.addr);
-  return `
-  <div class="sender-item ${state.activeSender === t.addr ? "active" : ""}" data-addr="${esc(t.addr)}">
-    <div class="avatar" style="background:${avatarColor(t.addr)}">${esc(initials(t.name))}</div>
-    <div class="sender-meta">
-      <div class="sender-name">${esc(t.name)}${auto}</div>
-      <div class="sender-sub">${sub}</div>
-    </div>
-    <div class="sender-right">
-      <span class="sender-date">${fmtDate(t.latest)}</span>
-      ${unread}
-    </div>
-  </div>`;
-}
-
-function renderSenderList() {
+/* ---------- ダッシュボード (タイル + 全員リスト) ---------- */
+function renderDash() {
   const ov = state.overview;
   if (!ov) return;
   const q = ($("#senderSearch").value || "").toLowerCase();
-  const match = (t) =>
-    !q || t.name.toLowerCase().includes(q) || t.addr.toLowerCase().includes(q);
+  const match = (t) => !q || t.name.toLowerCase().includes(q) || t.addr.toLowerCase().includes(q);
 
-  const favs = ov.favorites.filter(match);
-  $("#favSection").classList.toggle("hidden", favs.length === 0);
-  $("#favList").innerHTML = favs.map((t) => senderItemHtml(t, true)).join("");
+  const threads = buildThreads(filteredMessages());
 
-  const favSet = new Set(ov.favorites.map((f) => f.addr));
-  const rest = ov.threads.filter((t) => !favSet.has(t.addr)).filter(match);
-  $("#threadList").innerHTML = rest.map((t) => senderItemHtml(t, false)).join("");
+  // --- よく使う相手のタイル (最大20件・新着順) ---
+  const favMeta = {};
+  for (const f of ov.favorites) favMeta[f.addr] = f;
+  let tiles = Object.keys(favMeta)
+    .map((addr) => {
+      const t = threads[addr];
+      return {
+        addr,
+        name: t ? t.name : favMeta[addr].name,
+        unread: t ? t.unread : 0,
+        latest: t ? t.latest : "",
+        auto: favMeta[addr].auto,
+        present: !!t,
+      };
+    })
+    .filter((x) => state.account === "all" || x.present)
+    .filter(match)
+    .sort((a, b) => (b.latest || "").localeCompare(a.latest || ""))
+    .slice(0, 20);
 
-  $$("#senderList .sender-item").forEach((el) => {
-    el.addEventListener("click", () => {
-      state.activeSender = el.dataset.addr;
-      renderSenderList();
-      renderThread(state.activeSender);
-    });
+  $("#favTiles").innerHTML = tiles.length
+    ? tiles.map(tileHtml).join("")
+    : `<div class="tile-empty">まだ「よく使う相手」がありません。<br>下の一覧から相手を開いて「★ よく使う相手に追加」を押すか、やり取りを重ねると自動で追加されます。</div>`;
+
+  // --- 全員リスト (ソート可能) ---
+  let rows = Object.values(threads).filter(match);
+  const dir = state.sortDir;
+  rows.sort((a, b) => {
+    if (state.sortKey === "name") return a.name.localeCompare(b.name, "ja") * dir;
+    if (state.sortKey === "addr") return a.addr.localeCompare(b.addr) * dir;
+    return (a.latest || "").localeCompare(b.latest || "") * dir;
+  });
+  $("#allList").innerHTML = rows.map(rowHtml).join("") ||
+    `<div class="tile-empty">表示できる差出人がいません</div>`;
+
+  $$(".sort-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.sort === state.sortKey);
+    const arrow = b.dataset.sort === state.sortKey ? (state.sortDir < 0 ? " ▼" : " ▲") : "";
+    b.textContent = { latest: "受信日時", name: "名前", addr: "メールアドレス" }[b.dataset.sort] + arrow;
+  });
+
+  // クリックで会話を開く
+  $$("#favTiles .tile, #allList .all-row").forEach((el) => {
+    el.addEventListener("click", () => openThread(el.dataset.addr));
   });
 
   const spamTotal = ov.spam.length + ov.grey.length;
@@ -165,30 +229,73 @@ function renderSenderList() {
   badge.classList.toggle("hidden", spamTotal === 0);
   badge.textContent = spamTotal;
 }
-$("#senderSearch").addEventListener("input", renderSenderList);
 
-/* ---------- thread view ---------- */
+function tileHtml(t) {
+  const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "";
+  const auto = t.auto ? `<span class="auto-mark">自動</span>` : "";
+  return `
+  <div class="tile" data-addr="${esc(t.addr)}">
+    ${unread}
+    <div class="avatar" style="background:${avatarColor(t.addr)}">${esc(initials(t.name))}</div>
+    <div class="tile-name">${esc(t.name)} ${auto}</div>
+    <div class="tile-sub">${esc(t.addr)}</div>
+    <div class="tile-date">${fmtDate(t.latest)}</div>
+  </div>`;
+}
+
+function rowHtml(t) {
+  const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "";
+  return `
+  <div class="all-row" data-addr="${esc(t.addr)}">
+    <div class="avatar" style="background:${avatarColor(t.addr)}">${esc(initials(t.name))}</div>
+    <div class="r-name">${esc(t.name)}</div>
+    <div class="r-addr">${esc(t.addr)}</div>
+    <div class="r-date">${fmtDate(t.latest)}</div>
+    ${unread || "<span></span>"}
+  </div>`;
+}
+
+$("#senderSearch").addEventListener("input", renderDash);
+$$(".sort-btn").forEach((b) =>
+  b.addEventListener("click", () => {
+    if (state.sortKey === b.dataset.sort) {
+      state.sortDir *= -1;
+    } else {
+      state.sortKey = b.dataset.sort;
+      state.sortDir = b.dataset.sort === "latest" ? -1 : 1;
+    }
+    renderDash();
+  }));
+
+/* ---------- メッセンジャー画面 (オーバーレイ) ---------- */
+function openThread(addr) {
+  state.activeSender = addr;
+  $("#threadOverlay").classList.remove("hidden");
+  renderThread(addr);
+}
+$("#backBtn").addEventListener("click", () => {
+  $("#threadOverlay").classList.add("hidden");
+  state.activeSender = null;
+  renderDash();
+});
+
 function renderThread(addr) {
   const ov = state.overview;
   if (!ov) return;
-  const t = ov.threads.find((x) => x.addr === addr);
-  $("#threadEmpty").classList.add("hidden");
-  $("#threadView").classList.remove("hidden");
-  if (!t) {
-    $("#threadName").textContent = addr;
-    $("#threadAddr").textContent = "";
-    $("#bubbles").innerHTML = `<div class="empty-state"><p>この差出人からの最近のメールはありません</p></div>`;
-    return;
-  }
-  $("#threadName").textContent = t.name;
-  $("#threadAddr").textContent = t.addr;
+  const threads = buildThreads(filteredMessages());
+  const t = threads[addr];
+  $("#threadName").textContent = t ? t.name : addr;
+  $("#threadAddr").textContent = addr;
 
-  const favSet = new Set((ov.settings.favorites || []));
+  const favSet = new Set(ov.settings.favorites || []);
   const pinned = favSet.has(addr);
   $("#pinBtn").textContent = pinned ? "★ よく使う相手から外す" : "★ よく使う相手に追加";
   $("#pinBtn").dataset.action = pinned ? "unpin" : "pin";
 
-  // 古い→新しい順に、日付区切り付きで並べる
+  if (!t) {
+    $("#bubbles").innerHTML = `<div class="empty-state"><p>この差出人からの最近のメールはありません</p></div>`;
+    return;
+  }
   const msgs = [...t.messages].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   let html = "";
   let lastDay = "";
@@ -199,16 +306,16 @@ function renderThread(addr) {
       lastDay = day;
     }
     const time = m.date ? new Date(m.date).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "";
+    const acct = state.account === "all" && m.account ? ` ・ ${esc(m.account)}` : "";
     html += `
     <div class="bubble ${m.read ? "" : "unread"}" data-key="${esc(m.key)}" data-source="${esc(m.source)}">
       <div class="b-subject">${esc(m.subject)}</div>
-      <div class="b-time">${time}${m.read ? "" : " ・未読"}</div>
+      <div class="b-time">${time}${m.read ? "" : " ・未読"}${acct}</div>
       <div class="b-content"></div>
     </div>`;
   }
   $("#bubbles").innerHTML = html;
   $("#bubbles").scrollTop = $("#bubbles").scrollHeight;
-
   $$("#bubbles .bubble").forEach((el) => {
     el.addEventListener("click", () => toggleBubbleContent(el));
   });
@@ -220,7 +327,7 @@ async function toggleBubbleContent(el) {
     slot.innerHTML = slot.innerHTML ? "" : slot.dataset.html || "";
     return;
   }
-  if (el.dataset.source !== "applescript") {
+  if (el.dataset.source === "sqlite") {
     slot.innerHTML = `<div class="b-loading">本文表示は Mail.app で開いてください(高速モードでは一覧のみ)</div>`;
     slot.dataset.loaded = "1";
     return;
@@ -245,6 +352,7 @@ $("#blockBtn").addEventListener("click", async () => {
   if (!state.activeSender) return;
   await post("/api/spam/block", { sender: state.activeSender });
   toast("ブロックしました。今後この差出人は迷惑候補になります");
+  $("#threadOverlay").classList.add("hidden");
   loadOverview();
 });
 
@@ -360,7 +468,7 @@ function renderSettings() {
   $("#limitSelect").value = String(s.perAccountLimit || 100);
   $("#modeInfo").textContent = ov.fastMode
     ? "高速モード: Mail のローカルデータベースを直接読んでいます。"
-    : "AppleScriptモード: Mail.app 経由で取得しています。高速化するには、この画面下の README の手順でフルディスクアクセスを許可してください。";
+    : "AppleScriptモード: Mail.app 経由で取得しています。高速化するには README の手順でフルディスクアクセスを許可してください。";
   $("#trustCount").textContent = `${(s.trustedSenders || []).length} 件`;
   $("#blockCount").textContent = `${(s.blockedSenders || []).length} 件`;
   $("#trustList").innerHTML = (s.trustedSenders || []).map((a) => chipHtml(a, "trustedSenders")).join("") || `<span class="hint">まだありません</span>`;
@@ -385,7 +493,6 @@ $("#limitSelect").addEventListener("change", async (e) => {
 /* ---------- boot ---------- */
 loadOverview().then(() => {
   const ov = state.overview;
-  // キャッシュが空なら初回同期を自動で始める
   if (ov && ov.totalMessages === 0 && !ov.sync.running) {
     post("/api/sync").then(() => loadOverview());
   }

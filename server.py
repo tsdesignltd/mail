@@ -124,11 +124,14 @@ def build_overview():
     spam = [m for m in judged if m["spamClass"] == "spam"]
     grey = [m for m in judged if m["spamClass"] == "grey"]
 
+    accounts = sorted({m.get("account") for m in judged if m.get("account")})
+
     return {
         "threads": thread_list,
         "favorites": favorites,
         "spam": spam,
         "grey": grey,
+        "accounts": accounts,
         "totalMessages": len(judged),
         "settings": settings,
         "sync": store.status.snapshot(),

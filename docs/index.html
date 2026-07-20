@@ -16,40 +16,50 @@
       <button class="tab" data-tab="settings">設定</button>
     </nav>
     <div class="topbar-right">
+      <select id="accountSelect" title="メールアカウント切替">
+        <option value="all">すべてのアカウント</option>
+      </select>
       <span id="syncStatus" class="sync-status"></span>
       <button id="syncBtn" class="btn primary">同期</button>
     </div>
   </header>
 
-  <!-- 受信タブ: メッセンジャー風 -->
+  <!-- 受信タブ: サムネイルタイル型ダッシュボード -->
   <main id="view-inbox" class="view">
-    <aside id="senderList">
-      <div class="search-box"><input id="senderSearch" type="search" placeholder="差出人を検索"></div>
-      <div id="favSection">
-        <div class="section-title">★ よく使う相手</div>
-        <div id="favList"></div>
+    <div id="dash">
+      <div class="dash-head">
+        <div class="section-title big">★ よく使う相手</div>
+        <input id="senderSearch" type="search" placeholder="差出人を検索">
       </div>
-      <div class="section-title">すべての差出人</div>
-      <div id="threadList"></div>
-    </aside>
-    <section id="threadPane">
-      <div id="threadEmpty" class="empty-state">
-        <div class="empty-icon">💬</div>
-        <p>差出人を選ぶと、その相手とのメールが<br>会話形式で表示されます</p>
-      </div>
-      <div id="threadView" class="hidden">
-        <div id="threadHeader">
-          <div class="thread-title">
-            <div id="threadName"></div>
-            <div id="threadAddr"></div>
-          </div>
-          <div class="thread-actions">
-            <button id="pinBtn" class="btn small">★ よく使う相手に追加</button>
-            <button id="blockBtn" class="btn small danger">⛔ ブロック</button>
+      <div id="favTiles" class="tile-grid"></div>
+      <div class="all-box">
+        <div class="all-head">
+          <div class="section-title">すべての差出人</div>
+          <div class="sort-btns">
+            並び替え:
+            <button class="sort-btn" data-sort="latest">受信日時</button>
+            <button class="sort-btn" data-sort="name">名前</button>
+            <button class="sort-btn" data-sort="addr">メールアドレス</button>
           </div>
         </div>
-        <div id="bubbles"></div>
+        <div id="allList" class="all-list"></div>
       </div>
+    </div>
+
+    <!-- メッセンジャー画面 (タイルクリックで表示) -->
+    <section id="threadOverlay" class="hidden">
+      <div id="threadHeader">
+        <button id="backBtn" class="btn small">← 一覧に戻る</button>
+        <div class="thread-title">
+          <div id="threadName"></div>
+          <div id="threadAddr"></div>
+        </div>
+        <div class="thread-actions">
+          <button id="pinBtn" class="btn small">★ よく使う相手に追加</button>
+          <button id="blockBtn" class="btn small danger">⛔ ブロック</button>
+        </div>
+      </div>
+      <div id="bubbles"></div>
     </section>
   </main>
 

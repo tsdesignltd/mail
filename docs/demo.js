@@ -14,21 +14,21 @@
 
   // ---- 架空のサンプルメール ----
   let messages = [
-    { key: "d1", senderName: "田中 太郎", senderAddr: "taro.tanaka@example.co.jp", subject: "打ち合わせ日程の件", date: d(0, 9, 24), read: false, cls: "ok", reasons: [] },
-    { key: "d2", senderName: "田中 太郎", senderAddr: "taro.tanaka@example.co.jp", subject: "Re: 見積書のご確認", date: d(1, 15, 2), read: true, cls: "ok", reasons: [] },
-    { key: "d3", senderName: "田中 太郎", senderAddr: "taro.tanaka@example.co.jp", subject: "資料ありがとうございました", date: d(3, 11, 40), read: true, cls: "ok", reasons: [] },
-    { key: "d4", senderName: "佐藤 花子", senderAddr: "hanako@design-studio.example.jp", subject: "ロゴ案の修正版を送ります", date: d(0, 8, 5), read: false, cls: "ok", reasons: [] },
-    { key: "d5", senderName: "佐藤 花子", senderAddr: "hanako@design-studio.example.jp", subject: "納品データの形式について", date: d(2, 17, 30), read: true, cls: "ok", reasons: [] },
-    { key: "d6", senderName: "山本印刷", senderAddr: "order@yamamoto-print.example.jp", subject: "【受注確認】パンフレット 1,000部", date: d(1, 10, 12), read: true, cls: "ok", reasons: [] },
-    { key: "d7", senderName: "鈴木 一郎", senderAddr: "ichiro.suzuki@example.com", subject: "週末のライドの件", date: d(4, 20, 45), read: true, cls: "ok", reasons: [] },
-    { key: "d8", senderName: "Example ストア", senderAddr: "newsletter@store.example.com", subject: "夏のセールが始まりました", date: d(2, 7, 0), read: false, cls: "ok", reasons: [] },
-    { key: "s1", senderName: "Amazon サポート", senderAddr: "x93k2a1@secure-verify.top", subject: "【重要】アカウントが停止されました。本人確認が必要です", date: d(0, 3, 12), read: false, cls: "spam",
+    { key: "d1", account: "tsdesign.ltd@gmail.com", senderName: "田中 太郎", senderAddr: "taro.tanaka@example.co.jp", subject: "打ち合わせ日程の件", date: d(0, 9, 24), read: false, cls: "ok", reasons: [] },
+    { key: "d2", account: "tsdesign.ltd@gmail.com", senderName: "田中 太郎", senderAddr: "taro.tanaka@example.co.jp", subject: "Re: 見積書のご確認", date: d(1, 15, 2), read: true, cls: "ok", reasons: [] },
+    { key: "d3", account: "tsdesign.ltd@gmail.com", senderName: "田中 太郎", senderAddr: "taro.tanaka@example.co.jp", subject: "資料ありがとうございました", date: d(3, 11, 40), read: true, cls: "ok", reasons: [] },
+    { key: "d4", account: "tsdesign.ltd@gmail.com", senderName: "佐藤 花子", senderAddr: "hanako@design-studio.example.jp", subject: "ロゴ案の修正版を送ります", date: d(0, 8, 5), read: false, cls: "ok", reasons: [] },
+    { key: "d5", account: "tsdesign.ltd@gmail.com", senderName: "佐藤 花子", senderAddr: "hanako@design-studio.example.jp", subject: "納品データの形式について", date: d(2, 17, 30), read: true, cls: "ok", reasons: [] },
+    { key: "d6", account: "tsdesign.ltd@gmail.com", senderName: "山本印刷", senderAddr: "order@yamamoto-print.example.jp", subject: "【受注確認】パンフレット 1,000部", date: d(1, 10, 12), read: true, cls: "ok", reasons: [] },
+    { key: "d7", account: "monoralbikes@gmail.com", senderName: "鈴木 一郎", senderAddr: "ichiro.suzuki@example.com", subject: "週末のライドの件", date: d(4, 20, 45), read: true, cls: "ok", reasons: [] },
+    { key: "d8", account: "monoralbikes@gmail.com", senderName: "Example ストア", senderAddr: "newsletter@store.example.com", subject: "夏のセールが始まりました", date: d(2, 7, 0), read: false, cls: "ok", reasons: [] },
+    { key: "s1", account: "tsdesign.ltd@gmail.com", senderName: "Amazon サポート", senderAddr: "x93k2a1@secure-verify.top", subject: "【重要】アカウントが停止されました。本人確認が必要です", date: d(0, 3, 12), read: false, cls: "spam",
       reasons: ["「amazon」を名乗るが正規ドメインではない (secure-verify.top)", "アカウント停止を装うフィッシング", "迷惑メールに多いドメイン (secure-verify.top)"] },
-    { key: "s2", senderName: "宝くじ事務局", senderAddr: "prize8821k@lucky-winner.xyz", subject: "おめでとうございます!1億円当選のお知らせ!!!", date: d(1, 4, 55), read: false, cls: "spam",
+    { key: "s2", account: "monoralbikes@gmail.com", senderName: "宝くじ事務局", senderAddr: "prize8821k@lucky-winner.xyz", subject: "おめでとうございます!1億円当選のお知らせ!!!", date: d(1, 4, 55), read: false, cls: "spam",
       reasons: ["当選・懸賞系の件名", "迷惑メールに多いドメイン (lucky-winner.xyz)", "記号の多い件名"] },
-    { key: "g1", senderName: "CAMP GEAR SHOP", senderAddr: "info@campgear.shop", subject: "フォトコンテスト結果発表!", date: d(3, 12, 0), read: true, cls: "grey",
+    { key: "g1", account: "monoralbikes@gmail.com", senderName: "CAMP GEAR SHOP", senderAddr: "info@campgear.shop", subject: "フォトコンテスト結果発表!", date: d(3, 12, 0), read: true, cls: "grey",
       reasons: ["迷惑メールに多いドメイン (campgear.shop)"] },
-    { key: "g2", senderName: "投資セミナー事務局", senderAddr: "seminar@invest-info.example.net", subject: "無料オンラインセミナーのご案内", date: d(5, 9, 30), read: true, cls: "grey",
+    { key: "g2", account: "tsdesign.ltd@gmail.com", senderName: "投資セミナー事務局", senderAddr: "seminar@invest-info.example.net", subject: "無料オンラインセミナーのご案内", date: d(5, 9, 30), read: true, cls: "grey",
       reasons: ["「無料」を強調する件名"] },
   ];
 
@@ -84,6 +84,7 @@
       spam: judged.filter((m) => m.spamClass === "spam"),
       grey: judged.filter((m) => m.spamClass === "grey"),
       totalMessages: judged.length, settings,
+      accounts: [...new Set(messages.map((m) => m.account))].sort(),
       sync: { running: false, mode: "demo", progress: "", lastSync: d(0, 8, 0), error: null },
       fastMode: false, aiAvailable: false, spamMailbox: "MailDeck迷惑候補",
     };
