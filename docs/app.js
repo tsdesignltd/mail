@@ -157,9 +157,16 @@ function renderSyncStatus(sync) {
     }
   } else {
     btn.disabled = false;
+    const errs = sync.accountErrors || {};
+    const errNames = Object.keys(errs);
     if (sync.error) el.textContent = "エラー: " + sync.error;
-    else if (sync.lastSync) el.textContent = "最終同期: " + fmtDate(sync.lastSync) + (sync.mode === "sqlite" ? " (高速)" : "");
-    else el.textContent = "未同期 — 「同期」を押してください";
+    else if (sync.lastSync) {
+      el.textContent = "最終同期: " + fmtDate(sync.lastSync) + (sync.mode === "sqlite" ? " (高速)" : "");
+      if (errNames.length) {
+        el.textContent += ` ⚠️ ${errNames.length} アカウントで取得エラー`;
+        el.title = errNames.map((n) => `${n}: ${errs[n]}`).join("\n");
+      }
+    } else el.textContent = "未同期 — 「同期」を押してください";
   }
 }
 
@@ -202,8 +209,12 @@ function renderDash() {
     ? tiles.map(tileHtml).join("")
     : `<div class="tile-empty">まだ「よく使う相手」がありません。<br>下の一覧から相手を開いて「★ よく使う相手に追加」を押すか、やり取りを重ねると自動で追加されます。</div>`;
 
-  // --- 全員リスト (ソート可能) ---
-  let rows = Object.values(threads).filter(match);
+  // --- 全員リスト: 過去1ヶ月にやり取りのあった相手を全部表示 ---
+  const cutoffDays = ov.cutoffDays || 31;
+  const cutoff = new Date(Date.now() - cutoffDays * 86400000).toISOString().slice(0, 19);
+  let rows = Object.values(threads)
+    .filter((t) => (t.latest || "") >= cutoff)
+    .filter(match);
   const dir = state.sortDir;
   rows.sort((a, b) => {
     if (state.sortKey === "name") return a.name.localeCompare(b.name, "ja") * dir;

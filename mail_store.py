@@ -13,7 +13,7 @@ import sqlite3
 import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
@@ -25,6 +25,9 @@ REC_SEP = "␟"    # ␟
 
 # Apple epoch ではなく unix epoch が使われている列もあるため両対応で変換する
 APPLE_EPOCH_OFFSET = 978307200  # 2001-01-01
+
+# 「やり取りのあった相手」として扱う期間 (日)
+CUTOFF_DAYS = 31
 
 
 def run_osascript(script_name, args, timeout=600):
@@ -58,6 +61,7 @@ class SyncStatus(object):
         self.total_accounts = 0
         self.last_sync = None
         self.error = None
+        self.account_errors = {}  # アカウント名 -> 直近同期のエラー内容
 
     def snapshot(self):
         with self.lock:
@@ -69,7 +73,11 @@ class SyncStatus(object):
                 "totalAccounts": self.total_accounts,
                 "lastSync": self.last_sync,
                 "error": self.error,
+                "accountErrors": dict(self.account_errors),
             }
+
+
+MOVED_PATH = os.path.join(DATA_DIR, "moved.json")
 
 
 class MailStore(object):
@@ -78,7 +86,51 @@ class MailStore(object):
         self.messages = {}   # key -> dict
         self.replied_to = {} # address -> 返信した回数 (sqliteモードのみ)
         self.status = SyncStatus()
+        # 迷惑フォルダへ移動したメールの記録。受信トレイに戻ってきたら
+        # 「ユーザーが迷惑メールではないと指定した」とみなす。
+        # {"id:<acct>:<msgid>" or "mid:<rfcId>": senderAddr}
+        self.moved_records = {}
+        self.restored = set()  # 迷惑ではないと指定された差出人 (未処理分)
         self._load_cache()
+        self._load_moved()
+
+    def _load_moved(self):
+        if os.path.exists(MOVED_PATH):
+            try:
+                with open(MOVED_PATH, "r", encoding="utf-8") as f:
+                    self.moved_records = json.load(f)
+            except Exception:
+                self.moved_records = {}
+
+    def _save_moved(self):
+        os.makedirs(DATA_DIR, exist_ok=True)
+        tmp = MOVED_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self.moved_records, f, ensure_ascii=False)
+        os.replace(tmp, MOVED_PATH)
+
+    def _check_restored(self, msg):
+        """受信トレイで見つかったメールが「迷惑フォルダへ移動した記録」と一致したら、
+        ユーザーが Mail.app で迷惑メールではないと指定した(戻した)と判断する。"""
+        keys = []
+        if msg.get("id") is not None:
+            keys.append("id:%s:%s" % (msg.get("account"), msg["id"]))
+        if msg.get("rfcId"):
+            keys.append("mid:%s" % msg["rfcId"])
+        hit = False
+        for k in keys:
+            if k in self.moved_records:
+                self.restored.add(self.moved_records.pop(k))
+                hit = True
+        if hit:
+            self._save_moved()
+
+    def consume_restored(self):
+        """未処理の「迷惑ではない」差出人を取り出す (呼び出し側で信頼リストへ)。"""
+        with self.lock:
+            r = list(self.restored)
+            self.restored.clear()
+        return r
 
     # ---------- キャッシュ ----------
     def _load_cache(self):
@@ -183,15 +235,21 @@ class MailStore(object):
             with st.lock:
                 st.progress = "メッセージ %d 件を解析中..." % len(rows)
 
+            cutoff_iso = (datetime.now() - timedelta(days=CUTOFF_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
             new_messages = {}
             for r in rows:
                 url = r["mailbox_url"] or ""
                 # 受信トレイ系のみ対象(送信済み・ゴミ箱・迷惑は除外)
                 if url and not self._is_inbox_url(url):
                     continue
+                d = self._convert_date(r["date_"])
+                if d and d < cutoff_iso:
+                    continue
                 addr = (r["sender_addr"] or "").lower()
                 name = r["sender_name"] or addr or "(不明)"
                 key = "sq:%s" % r["rowid_"]
+                if isinstance(r["rfc_id"], str):
+                    self._check_restored({"rfcId": r["rfc_id"]})
                 new_messages[key] = {
                     "key": key,
                     "source": "sqlite",
@@ -287,20 +345,16 @@ class MailStore(object):
             with st.lock:
                 st.total_accounts = len(accounts)
 
+            with st.lock:
+                st.account_errors = {}
             for acct in accounts:
-                with st.lock:
-                    st.progress = "%s から取得中..." % acct["name"]
                 try:
-                    n = min(per_account_limit, acct["count"])
-                    if n == 0:
+                    if acct["count"] == 0:
                         continue
-                    raw = run_osascript("fetch_inbox.applescript",
-                                        [acct["name"], acct["mailbox"], n], timeout=900)
-                    self._merge_applescript(acct, raw)
-                    self._save_cache()
+                    self._fetch_account_chunked(acct, per_account_limit)
                 except Exception as e:
                     with st.lock:
-                        st.progress = "%s でエラー: %s" % (acct["name"], e)
+                        st.account_errors[acct["name"]] = str(e)
                 finally:
                     with st.lock:
                         st.done_accounts += 1
@@ -316,6 +370,48 @@ class MailStore(object):
             with st.lock:
                 st.running = False
 
+    CHUNK_SIZE = 50
+
+    def _fetch_account_chunked(self, acct, cap):
+        """過去 CUTOFF_DAYS 日分を 50通ずつ分割取得する。
+        巨大メールボックスでの一括取得は Mail の接続が切れる(-609)ため。
+        チャンク失敗は1回リトライし、2回失敗したら途中まで保存して打ち切る。"""
+        st = self.status
+        cutoff_iso = (datetime.now() - timedelta(days=CUTOFF_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
+        start = 1
+        fetched = 0
+        while fetched < cap:
+            end = min(start + self.CHUNK_SIZE - 1, start + cap - fetched - 1)
+            with st.lock:
+                st.progress = "%s から取得中... (%d件目〜)" % (acct["name"], start)
+            raw = None
+            for attempt in (1, 2):
+                try:
+                    raw = run_osascript("fetch_chunk.applescript",
+                                        [acct["name"], acct["mailbox"], start, end],
+                                        timeout=600)
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        with st.lock:
+                            st.account_errors[acct["name"]] = \
+                                "%d件目以降の取得に失敗: %s" % (start, e)
+                        return
+                    time.sleep(3)
+            if not raw.strip():
+                return  # メールボックスの末尾に到達
+            records = [r for r in raw.split(REC_SEP) if r.strip()]
+            self._merge_applescript(acct, raw)
+            self._save_cache()
+            fetched += len(records)
+            # このチャンクの最古が期間外なら打ち切り (1が最新の前提)
+            oldest = records[-1].split(FIELD_SEP)
+            if len(oldest) >= 2 and oldest[1] < cutoff_iso:
+                return
+            if len(records) < (end - start + 1):
+                return  # 末尾に到達
+            start = end + 1
+
     def _merge_applescript(self, acct, raw):
         for rec in raw.split(REC_SEP):
             if not rec.strip():
@@ -326,6 +422,7 @@ class MailStore(object):
             msg_id, date_s, read_s, sender_raw, subject = parts[0], parts[1], parts[2], parts[3], FIELD_SEP.join(parts[4:])
             name, addr = parse_sender(sender_raw)
             key = "as:%s:%s" % (acct["name"], msg_id)
+            self._check_restored({"id": int(msg_id), "account": acct["name"]})
             with self.lock:
                 self.messages[key] = {
                     "key": key,
@@ -419,9 +516,10 @@ class MailStore(object):
         return {"moved": moved, "failed": failed, "skipped": skipped}
 
     def move_to_junk(self, keys):
-        """指定メッセージを各アカウント自身の迷惑メールフォルダへ移動する。"""
+        """指定メッセージを各アカウント自身の迷惑メールフォルダへ移動する。
+        成功したメールは記録し、後で受信トレイに戻されたら「迷惑ではない」と判断する。"""
         args = []
-        movable = []
+        movable = []  # (key, 記録キー, senderAddr)
         acct_map = self.load_account_map()
         with self.lock:
             for k in keys:
@@ -430,20 +528,28 @@ class MailStore(object):
                     continue
                 if m.get("id") is not None:
                     args += [m["account"], m["mailbox"], "id", m["id"]]
-                    movable.append(k)
+                    movable.append((k, "id:%s:%s" % (m["account"], m["id"]), m.get("senderAddr", "")))
                 elif m.get("rfcId"):
                     acct_name = acct_map.get(m.get("account", ""), m.get("account", ""))
                     args += [acct_name, "INBOX", "mid", m["rfcId"]]
-                    movable.append(k)
+                    movable.append((k, "mid:%s" % m["rfcId"], m.get("senderAddr", "")))
         if not movable:
             return {"moved": 0, "failed": 0, "skipped": len(keys)}
         out = run_osascript("move_to_junk.applescript", args, timeout=900)
-        moved, failed = [int(x) for x in out.split(",")]
-        if moved:
-            with self.lock:
-                for k in movable:
+        statuses = out.split(",")
+        moved = failed = 0
+        with self.lock:
+            for (k, rec_key, addr), st_ in zip(movable, statuses):
+                if st_ == "1":
+                    moved += 1
                     self.messages.pop(k, None)
+                    if addr:
+                        self.moved_records[rec_key] = addr
+                else:
+                    failed += 1
+        if moved:
             self._save_cache()
+            self._save_moved()
         return {"moved": moved, "failed": failed, "skipped": len(keys) - len(movable)}
 
     def keys_by_sender(self, addr):

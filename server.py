@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 import rules
-from mail_store import MailStore, run_osascript, FIELD_SEP, REC_SEP, DATA_DIR
+from mail_store import MailStore, run_osascript, FIELD_SEP, REC_SEP, DATA_DIR, CUTOFF_DAYS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     "favorites": [],            # 手動追加した「よく使う相手」
     "dismissedFavorites": [],   # 自動追加を拒否した相手
     "autoFavorite": True,
-    "perAccountLimit": 100,
+    "perAccountLimit": 300,  # 1アカウントの最大取得件数 (過去1ヶ月分の安全上限)
 }
 
 store = MailStore()
@@ -64,9 +64,28 @@ def claude_cli():
     return shutil.which("claude")
 
 
+def apply_restored_senders(settings):
+    """Mail.app で「迷惑メールではない」と指定(受信トレイへ戻)された差出人を
+    ブロックリストから外し、信頼リストへ移す。"""
+    restored = store.consume_restored()
+    if not restored:
+        return settings
+    changed = False
+    for addr in restored:
+        if addr in settings["blockedSenders"]:
+            settings["blockedSenders"].remove(addr)
+            changed = True
+        if addr not in settings["trustedSenders"]:
+            settings["trustedSenders"].append(addr)
+            changed = True
+    if changed:
+        save_settings(settings)
+    return settings
+
+
 def build_overview():
     """UI 用のまとめ: 差出人別スレッド・迷惑候補・よく使う相手。"""
-    settings = load_settings()
+    settings = apply_restored_senders(load_settings())
     messages = store.all_messages()
     sender_stats = rules.build_sender_stats(messages, store.replied_to)
 
@@ -138,6 +157,7 @@ def build_overview():
         "fastMode": store.sqlite_available(),
         "aiAvailable": claude_cli() is not None,
         "spamMailbox": "各アカウントの迷惑メールフォルダ",
+        "cutoffDays": CUTOFF_DAYS,
     }
 
 

@@ -3,10 +3,10 @@
 --   kind = "id"  : Mail 内部の numeric id
 --   kind = "mid" : RFC Message-ID (Envelope Index 直読みモード用)
 -- 迷惑フォルダ名はアカウントにより異なるため候補から自動解決する。
+-- 戻り値: 1レコード1文字 ("1"=成功 / "0"=失敗) をカンマ区切りで、引数の順に返す
 on run argv
 	set junkNames to {"迷惑メール", "Junk", "Junk E-mail", "Spam", "spam"}
-	set moved to 0
-	set failed to 0
+	set results to {}
 	tell application "Mail"
 		set i to 1
 		repeat while i ≤ (count of argv)
@@ -32,15 +32,18 @@ on run argv
 				end if
 				if (count of found) > 0 then
 					move (item 1 of found) to junkMB
-					set moved to moved + 1
+					copy "1" to end of results
 				else
-					set failed to failed + 1
+					copy "0" to end of results
 				end if
 			on error
-				set failed to failed + 1
+				copy "0" to end of results
 			end try
 			set i to i + 4
 		end repeat
 	end tell
-	return (moved as text) & "," & (failed as text)
+	set AppleScript's text item delimiters to ","
+	set txt to results as text
+	set AppleScript's text item delimiters to ""
+	return txt
 end run

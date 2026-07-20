@@ -34,7 +34,7 @@
       <div id="favTiles" class="tile-grid"></div>
       <div class="all-box">
         <div class="all-head">
-          <div class="section-title">すべての差出人</div>
+          <div class="section-title">すべての差出人(過去1ヶ月)</div>
           <div class="sort-btns">
             並び替え:
             <button class="sort-btn" data-sort="latest">受信日時</button>
@@ -87,15 +87,15 @@
         <label><input type="checkbox" id="autoFavToggle"> 重要な差出人を自動で「よく使う相手」に追加する</label>
       </div>
       <div class="setting-row">
-        <label>同期時に各アカウントから取得する件数:
+        <label>1アカウントの最大取得件数:
           <select id="limitSelect">
-            <option value="50">50件</option>
             <option value="100">100件</option>
             <option value="200">200件</option>
             <option value="300">300件</option>
+            <option value="500">500件</option>
           </select>
         </label>
-        <p class="hint">AppleScriptモードでは件数が多いほど同期に時間がかかります。</p>
+        <p class="hint">同期は過去1ヶ月分のメールを自動で全部取得します。この件数はその安全上限です(メールが非常に多い場合の保護)。</p>
       </div>
       <div class="setting-row">
         <h3>動作モード</h3>
