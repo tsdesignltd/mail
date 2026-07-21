@@ -231,9 +231,10 @@ body {
   padding: 3px 12px; border-radius: 12px; margin: 14px 0 8px;
 }
 .bubble {
+  position: relative;
   max-width: 72%; align-self: flex-start;
   background: var(--bubble-in); border-radius: var(--bubble-radius);
-  padding: 10px 14px; margin: 2px 0; cursor: pointer;
+  padding: 10px 14px 10px 14px; margin: 2px 0; cursor: pointer;
 }
 /* 自分の返信は右寄せ・アクセント色 (メッセンジャー風) */
 .bubble.from-me {
@@ -249,7 +250,7 @@ body {
 .bubble.from-me .b-loading { color: rgba(255, 255, 255, 0.85); }
 .bubble:hover { filter: brightness(0.97); }
 .bubble .b-subject { font-weight: 600; font-size: 13.5px; }
-.bubble .b-time { color: var(--muted); font-size: 11px; margin-top: 4px; }
+.bubble .b-time { color: var(--muted); font-size: 11px; margin-top: 4px; padding-right: 22px; }
 .bubble.unread { border-left: 3px solid var(--accent); }
 .bubble .b-body {
   margin-top: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word;
@@ -257,18 +258,16 @@ body {
   max-height: 340px; overflow-y: auto;
 }
 .bubble .b-loading { color: var(--muted); font-size: 12px; margin-top: 6px; }
+/* 右下の小さな封筒アイコン(アイコンのみ) */
 .bubble .b-open {
-  margin-top: 8px; font-size: 11.5px; padding: 3px 10px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: 12px;
-  background: var(--panel); color: var(--accent);
+  position: absolute; right: 8px; bottom: 6px;
+  border: none; background: transparent; cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 2px; border-radius: 6px;
+  opacity: 0.55; transition: opacity 0.12s ease;
 }
-.bubble .b-open:hover { background: var(--accent-soft); }
-.bubble .b-open:disabled { opacity: 0.6; cursor: default; }
-.bubble.from-me .b-open {
-  background: rgba(255, 255, 255, 0.18); color: var(--bubble-out-text);
-  border-color: rgba(255, 255, 255, 0.4);
-}
-.bubble.from-me .b-open:hover { background: rgba(255, 255, 255, 0.3); }
+.bubble:hover .b-open { opacity: 0.9; }
+.bubble .b-open:hover { opacity: 1; }
+.bubble .b-open:disabled { opacity: 0.35; cursor: default; }
 
 /* ---------- spam view ---------- */
 #view-spam { flex: 1; overflow-y: auto; }
