@@ -11,6 +11,8 @@
   --warn: #b8860b;
   --warn-soft: #fff7e0;
   --bubble-in: #eef0f2;
+  --bubble-out: #0a7cff;
+  --bubble-out-text: #ffffff;
   --bubble-radius: 18px;
 }
 @media (prefers-color-scheme: dark) {
@@ -27,6 +29,8 @@
     --warn: #e0b23e;
     --warn-soft: #3d3423;
     --bubble-in: #3a3b3c;
+    --bubble-out: #2d88ff;
+    --bubble-out-text: #ffffff;
   }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -231,6 +235,18 @@ body {
   background: var(--bubble-in); border-radius: var(--bubble-radius);
   padding: 10px 14px; margin: 2px 0; cursor: pointer;
 }
+/* 自分の返信は右寄せ・アクセント色 (メッセンジャー風) */
+.bubble.from-me {
+  align-self: flex-end;
+  background: var(--bubble-out); color: var(--bubble-out-text);
+}
+.bubble.from-me .b-subject { color: var(--bubble-out-text); }
+.bubble.from-me .b-time { color: rgba(255, 255, 255, 0.8); }
+.bubble.from-me .b-body {
+  color: var(--bubble-out-text);
+  border-top-color: rgba(255, 255, 255, 0.35);
+}
+.bubble.from-me .b-loading { color: rgba(255, 255, 255, 0.85); }
 .bubble:hover { filter: brightness(0.97); }
 .bubble .b-subject { font-weight: 600; font-size: 13.5px; }
 .bubble .b-time { color: var(--muted); font-size: 11px; margin-top: 4px; }

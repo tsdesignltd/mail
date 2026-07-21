@@ -90,16 +90,23 @@ def build_overview():
     excluded = set(settings.get("excludedAccounts", []))
     messages = [m for m in store.all_messages()
                 if m.get("account") not in excluded]
-    sender_stats = rules.build_sender_stats(messages, store.replied_to)
+    # 受信(相手から)と送信(自分から)を分ける。迷惑判定・統計は受信のみで行う。
+    received = [m for m in messages if not m.get("fromMe")]
+    sent = [m for m in messages if m.get("fromMe")]
+    sender_stats = rules.build_sender_stats(received, store.replied_to)
 
     judged = []
-    for m in messages:
+    for m in received:
         score, reasons = rules.judge_message(m, settings, sender_stats)
         cls = rules.classify(score)
         mm = dict(m)
         mm["spamScore"] = score
         mm["spamClass"] = cls
         mm["spamReasons"] = reasons
+        # 会話相手 = 差出人。フロントのスレッド分けと左右振り分けに使う。
+        mm["partyAddr"] = m["senderAddr"]
+        mm["partyName"] = m["senderName"]
+        mm["fromMe"] = False
         judged.append(mm)
     judged.sort(key=lambda x: x.get("date") or "", reverse=True)
 
@@ -122,6 +129,25 @@ def build_overview():
             t["latestSubject"] = m.get("subject") or ""
             t["name"] = m["senderName"]
         t["messages"].append(m)
+
+    # 送信済みメールを「相手(宛先)」ごとの既存スレッドに混ぜる。
+    # 会話のある相手にだけ足す(送信のみの相手で新規スレッドは作らない)。
+    for m in sent:
+        t = threads.get(m.get("toAddr"))
+        if not t:
+            continue
+        mm = dict(m)
+        mm["spamScore"] = 0
+        mm["spamClass"] = "ok"
+        mm["spamReasons"] = []
+        mm["partyAddr"] = m["toAddr"]
+        mm["partyName"] = t["name"]
+        mm["fromMe"] = True
+        t["count"] += 1
+        if (m.get("date") or "") > t["latest"]:
+            t["latest"] = m.get("date") or ""
+            t["latestSubject"] = m.get("subject") or ""
+        t["messages"].append(mm)
     thread_list = sorted(threads.values(), key=lambda t: t["latest"], reverse=True)
 
     # よく使う相手 (手動 + 自動)
@@ -294,6 +320,18 @@ class Handler(BaseHTTPRequestHandler):
             started = store.sync(per_account_limit=int(settings.get("perAccountLimit", 300)),
                                  excluded=settings.get("excludedAccounts", []))
             return self._json({"started": started, "status": store.status.snapshot()})
+
+        if u.path == "/api/sync/sender":
+            addr = (body.get("addr") or "").strip()
+            if not addr:
+                return self._json({"error": "addr required"}, 400)
+            if store.status.running:
+                return self._json({"busy": True, "reason": "full-sync"})
+            try:
+                result = store.sync_sender(addr, excluded=settings.get("excludedAccounts", []))
+            except Exception as e:
+                return self._json({"error": str(e)}, 500)
+            return self._json(result)
 
         if u.path == "/api/spam/move":
             keys = body.get("keys", [])

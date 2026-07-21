@@ -91,6 +91,8 @@ class MailStore(object):
         # {"id:<acct>:<msgid>" or "mid:<rfcId>": senderAddr}
         self.moved_records = {}
         self.restored = set()  # 迷惑ではないと指定された差出人 (未処理分)
+        self.sender_lock = threading.Lock()
+        self.sender_syncing = False  # 差出人個別同期の実行中フラグ
         self._load_cache()
         self._load_moved()
 
@@ -328,6 +330,104 @@ class MailStore(object):
         return "local"
 
     # ---------- AppleScript (フォールバック) ----------
+    def _list_accounts(self):
+        """有効アカウントと受信/送信メールボックス名・件数を取得する。
+        list_accounts.applescript の出力: 名前␞受信MB␞受信件数␞送信MB␞送信件数
+        (旧形式 名前␞MB␞件数 も許容)。副作用で accounts.json を更新する。"""
+        raw = run_osascript("list_accounts.applescript", [], timeout=900)
+        accounts = []
+        for rec in raw.split(REC_SEP):
+            if not rec.strip():
+                continue
+            parts = rec.split(FIELD_SEP)
+            if len(parts) >= 3:
+                acct = {"name": parts[0], "mailbox": parts[1], "count": int(parts[2]),
+                        "sentMailbox": "", "sentCount": 0}
+                if len(parts) >= 5:
+                    acct["sentMailbox"] = parts[3]
+                    try:
+                        acct["sentCount"] = int(parts[4])
+                    except ValueError:
+                        acct["sentCount"] = 0
+                accounts.append(acct)
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(os.path.join(DATA_DIR, "accounts.json"), "w", encoding="utf-8") as f:
+            json.dump({a["name"]: a["name"] for a in accounts}, f, ensure_ascii=False)
+        return accounts
+
+    def sync_sender(self, addr, excluded=None):
+        """指定アドレスとの受信+送信の全履歴を、全(非除外)アカウントから取得する。
+        差出人個別ページの「同期」ボタン用。期間の上限なし(その相手の分だけ)。"""
+        addr = (addr or "").lower().strip()
+        if not addr:
+            return {"received": 0, "sent": 0, "error": "アドレスが空です"}
+        excluded = set(excluded or [])
+        with self.sender_lock:
+            if self.sender_syncing:
+                return {"busy": True}
+            self.sender_syncing = True
+        r_count = s_count = 0
+        try:
+            accounts = self._list_accounts()
+            for acct in accounts:
+                if acct["name"] in excluded:
+                    continue
+                try:
+                    raw = run_osascript(
+                        "fetch_sender.applescript",
+                        [acct["name"], acct["mailbox"], acct.get("sentMailbox", ""), addr],
+                        timeout=600)
+                except Exception:
+                    continue  # 1アカウント失敗は無視して続行
+                for rec in raw.split(REC_SEP):
+                    if not rec.strip():
+                        continue
+                    parts = rec.split(FIELD_SEP)
+                    if len(parts) < 6:
+                        continue
+                    typ = parts[0]
+                    if typ == "R":
+                        msg_id, date_s, read_s, sender_raw = parts[1], parts[2], parts[3], parts[4]
+                        subject = FIELD_SEP.join(parts[5:])
+                        name, saddr = parse_sender(sender_raw)
+                        key = "as:%s:%s" % (acct["name"], msg_id)
+                        try:
+                            self._check_restored({"id": int(msg_id), "account": acct["name"]})
+                        except ValueError:
+                            pass
+                        with self.lock:
+                            self.messages[key] = {
+                                "key": key, "source": "applescript", "rowid": None,
+                                "account": acct["name"], "mailbox": acct["mailbox"],
+                                "id": int(msg_id), "date": date_s, "read": read_s == "true",
+                                "flagged": False, "senderName": name, "senderAddr": saddr,
+                                "subject": subject or "(件名なし)",
+                            }
+                        r_count += 1
+                    elif typ == "S":
+                        msg_id, date_s, to_addr, to_name = parts[1], parts[2], parts[3], parts[4]
+                        subject = FIELD_SEP.join(parts[5:])
+                        to_addr = (to_addr or "").lower().strip()
+                        if not to_addr:
+                            continue
+                        key = "sent:%s:%s" % (acct["name"], msg_id)
+                        with self.lock:
+                            self.messages[key] = {
+                                "key": key, "source": "applescript", "rowid": None,
+                                "account": acct["name"], "mailbox": acct.get("sentMailbox", ""),
+                                "id": int(msg_id), "date": date_s, "read": True,
+                                "flagged": False, "fromMe": True,
+                                "toAddr": to_addr, "toName": to_name or to_addr,
+                                "senderName": "自分", "senderAddr": acct["name"],
+                                "subject": subject or "(件名なし)",
+                            }
+                        s_count += 1
+            self._save_cache()
+        finally:
+            with self.sender_lock:
+                self.sender_syncing = False
+        return {"received": r_count, "sent": s_count}
+
     def sync_applescript(self, per_account_limit=100, excluded=None):
         excluded = set(excluded or [])
         st = self.status
@@ -338,18 +438,7 @@ class MailStore(object):
             st.error = None
             st.done_accounts = 0
         try:
-            raw = run_osascript("list_accounts.applescript", [], timeout=900)
-            accounts = []
-            for rec in raw.split(REC_SEP):
-                if not rec.strip():
-                    continue
-                parts = rec.split(FIELD_SEP)
-                if len(parts) == 3:
-                    accounts.append({"name": parts[0], "mailbox": parts[1], "count": int(parts[2])})
-            # 設定画面用に全アカウント名を保存してから、除外分を落とす
-            os.makedirs(DATA_DIR, exist_ok=True)
-            with open(os.path.join(DATA_DIR, "accounts.json"), "w", encoding="utf-8") as f:
-                json.dump({a["name"]: a["name"] for a in accounts}, f, ensure_ascii=False)
+            accounts = self._list_accounts()
             accounts = [a for a in accounts if a["name"] not in excluded]
             with st.lock:
                 st.total_accounts = len(accounts)
@@ -358,9 +447,11 @@ class MailStore(object):
                 st.account_errors = {}
             for acct in accounts:
                 try:
-                    if acct["count"] == 0:
-                        continue
-                    self._fetch_account_chunked(acct, per_account_limit)
+                    if acct["count"] > 0:
+                        self._fetch_account_chunked(acct, per_account_limit)
+                    # 送信済みも取得して「自分の返信」をタイムラインに混ぜる
+                    if acct.get("sentMailbox") and acct.get("sentCount", 0) > 0:
+                        self._fetch_sent_chunked(acct, per_account_limit)
                 except Exception as e:
                     with st.lock:
                         st.account_errors[acct["name"]] = str(e)
@@ -445,6 +536,75 @@ class MailStore(object):
                     "flagged": False,
                     "senderName": name,
                     "senderAddr": addr,
+                    "subject": subject or "(件名なし)",
+                }
+
+    SENT_CHUNK_SIZE = 25  # 送信は1通ずつ宛先を読むため受信より小さめ
+
+    def _fetch_sent_chunked(self, acct, cap):
+        """送信済みメールボックスを過去 CUTOFF_DAYS 日分・分割取得する。
+        1通ずつ宛先(受取人)を読むため受信より遅い。上限 cap で打ち切る。"""
+        st = self.status
+        cutoff_iso = (datetime.now() - timedelta(days=CUTOFF_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
+        start = 1
+        fetched = 0
+        while fetched < cap:
+            end = min(start + self.SENT_CHUNK_SIZE - 1, start + cap - fetched - 1)
+            with st.lock:
+                st.progress = "%s の送信履歴を取得中... (%d件目〜)" % (acct["name"], start)
+            raw = None
+            for attempt in (1, 2):
+                try:
+                    raw = run_osascript("fetch_sent_chunk.applescript",
+                                        [acct["name"], acct["sentMailbox"], start, end],
+                                        timeout=600)
+                    break
+                except Exception:
+                    if attempt == 2:
+                        return  # 送信履歴の取得失敗は致命的でないので黙って諦める
+                    time.sleep(3)
+            if not raw.strip():
+                return
+            records = [r for r in raw.split(REC_SEP) if r.strip()]
+            self._merge_sent_applescript(acct, raw)
+            self._save_cache()
+            fetched += len(records)
+            oldest = records[-1].split(FIELD_SEP)
+            if len(oldest) >= 2 and oldest[1] < cutoff_iso:
+                return
+            if len(records) < (end - start + 1):
+                return
+            start = end + 1
+
+    def _merge_sent_applescript(self, acct, raw):
+        for rec in raw.split(REC_SEP):
+            if not rec.strip():
+                continue
+            parts = rec.split(FIELD_SEP)
+            if len(parts) < 5:
+                continue
+            msg_id, date_s, to_addr, to_name, subject = (
+                parts[0], parts[1], parts[2], parts[3], FIELD_SEP.join(parts[4:]))
+            to_addr = (to_addr or "").lower().strip()
+            if not to_addr:
+                continue
+            key = "sent:%s:%s" % (acct["name"], msg_id)
+            with self.lock:
+                self.messages[key] = {
+                    "key": key,
+                    "source": "applescript",
+                    "rowid": None,
+                    "account": acct["name"],
+                    "mailbox": acct["sentMailbox"],
+                    "id": int(msg_id),
+                    "date": date_s,
+                    "read": True,
+                    "flagged": False,
+                    "fromMe": True,
+                    "toAddr": to_addr,
+                    "toName": to_name or to_addr,
+                    "senderName": "自分",
+                    "senderAddr": acct["name"],
                     "subject": subject or "(件名なし)",
                 }
 

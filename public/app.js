@@ -92,18 +92,22 @@ function filteredMessages() {
 }
 
 function buildThreads(msgs) {
+  // 会話相手(partyAddr)ごとにまとめる。partyAddr は受信=差出人 / 送信=宛先。
   const threads = {};
   for (const m of msgs) {
-    const t = threads[m.senderAddr] || (threads[m.senderAddr] = {
-      addr: m.senderAddr, name: m.senderName,
+    const addr = m.partyAddr || m.senderAddr;
+    const name = m.partyName || m.senderName;
+    const t = threads[addr] || (threads[addr] = {
+      addr, name,
       unread: 0, count: 0, latest: "", latestSubject: "", messages: [],
     });
     t.count++;
-    if (!m.read) t.unread++;
+    // 未読は相手からの受信メールのみ数える(自分の送信は常に既読扱い)
+    if (!m.fromMe && !m.read) t.unread++;
     if ((m.date || "") > t.latest) {
       t.latest = m.date || "";
       t.latestSubject = m.subject || "";
-      t.name = m.senderName;
+      if (!m.fromMe) t.name = name; // 相手名のみで上書き(自分の名前で置換しない)
     }
     t.messages.push(m);
   }
@@ -300,7 +304,47 @@ function openThread(addr) {
   state.activeSender = addr;
   $("#threadOverlay").classList.remove("hidden");
   renderThread(addr);
+  // 開いたら自動でこの相手の送受信履歴を同期(バックグラウンド、UIはブロックしない)。
+  // 巨大メールボックスへの再スキャンを避けるため、セッション中は相手ごとに1回だけ。
+  state.syncedSenders = state.syncedSenders || new Set();
+  if (!state.syncedSenders.has(addr)) syncSender(addr, { auto: true });
 }
+
+// 差出人個別の同期。received+sent の全履歴を取得して会話を更新する。
+async function syncSender(addr, opts) {
+  opts = opts || {};
+  const btn = $("#syncSenderBtn");
+  if (state.senderSyncing) return;         // 二重起動防止
+  state.senderSyncing = true;
+  const orig = btn.textContent;
+  btn.textContent = "同期中…";
+  btn.disabled = true;
+  try {
+    const r = await post("/api/sync/sender", { addr });
+    if (r && r.busy) {
+      if (!opts.auto) toast("同期中です。少し待ってからお試しください");
+    } else if (r && r.error) {
+      toast("同期に失敗: " + r.error);
+    } else {
+      state.syncedSenders = state.syncedSenders || new Set();
+      state.syncedSenders.add(addr);
+      await loadOverview();              // 完了時に一覧・会話を再描画
+      if (state.activeSender === addr && !$("#threadOverlay").classList.contains("hidden")) {
+        renderThread(addr);
+      }
+      toast(`同期完了: 受信 ${r.received} 件 / 送信 ${r.sent} 件`);
+    }
+  } catch (e) {
+    if (!opts.auto) toast("同期に失敗しました");
+  } finally {
+    state.senderSyncing = false;
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+$("#syncSenderBtn").addEventListener("click", () => {
+  if (state.activeSender) syncSender(state.activeSender, { auto: false });
+});
 function backToList() {
   $("#threadOverlay").classList.add("hidden");
   state.activeSender = null;
@@ -343,10 +387,13 @@ function renderThread(addr) {
     }
     const time = m.date ? new Date(m.date).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "";
     const acct = state.account === "all" && m.account ? ` ・ ${esc(m.account)}` : "";
+    const side = m.fromMe ? "from-me" : "from-them";
+    const meta = m.fromMe ? `${time} ・自分の返信${acct}`
+                          : `${time}${m.read ? "" : " ・未読"}${acct}`;
     html += `
-    <div class="bubble ${m.read ? "" : "unread"}" data-key="${esc(m.key)}" data-source="${esc(m.source)}">
+    <div class="bubble ${side} ${!m.fromMe && !m.read ? "unread" : ""}" data-key="${esc(m.key)}" data-source="${esc(m.source)}">
       <div class="b-subject">${esc(m.subject)}</div>
-      <div class="b-time">${time}${m.read ? "" : " ・未読"}${acct}</div>
+      <div class="b-time">${meta}</div>
       <div class="b-content"></div>
     </div>`;
   }
