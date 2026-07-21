@@ -445,13 +445,11 @@ class MailStore(object):
 
             with st.lock:
                 st.account_errors = {}
+            # 全体同期は受信のみ(左側)。自分の返信(右側)は差出人個別の同期でのみ取得する。
             for acct in accounts:
                 try:
                     if acct["count"] > 0:
                         self._fetch_account_chunked(acct, per_account_limit)
-                    # 送信済みも取得して「自分の返信」をタイムラインに混ぜる
-                    if acct.get("sentMailbox") and acct.get("sentCount", 0) > 0:
-                        self._fetch_sent_chunked(acct, per_account_limit)
                 except Exception as e:
                     with st.lock:
                         st.account_errors[acct["name"]] = str(e)
@@ -536,75 +534,6 @@ class MailStore(object):
                     "flagged": False,
                     "senderName": name,
                     "senderAddr": addr,
-                    "subject": subject or "(件名なし)",
-                }
-
-    SENT_CHUNK_SIZE = 25  # 送信は1通ずつ宛先を読むため受信より小さめ
-
-    def _fetch_sent_chunked(self, acct, cap):
-        """送信済みメールボックスを過去 CUTOFF_DAYS 日分・分割取得する。
-        1通ずつ宛先(受取人)を読むため受信より遅い。上限 cap で打ち切る。"""
-        st = self.status
-        cutoff_iso = (datetime.now() - timedelta(days=CUTOFF_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
-        start = 1
-        fetched = 0
-        while fetched < cap:
-            end = min(start + self.SENT_CHUNK_SIZE - 1, start + cap - fetched - 1)
-            with st.lock:
-                st.progress = "%s の送信履歴を取得中... (%d件目〜)" % (acct["name"], start)
-            raw = None
-            for attempt in (1, 2):
-                try:
-                    raw = run_osascript("fetch_sent_chunk.applescript",
-                                        [acct["name"], acct["sentMailbox"], start, end],
-                                        timeout=600)
-                    break
-                except Exception:
-                    if attempt == 2:
-                        return  # 送信履歴の取得失敗は致命的でないので黙って諦める
-                    time.sleep(3)
-            if not raw.strip():
-                return
-            records = [r for r in raw.split(REC_SEP) if r.strip()]
-            self._merge_sent_applescript(acct, raw)
-            self._save_cache()
-            fetched += len(records)
-            oldest = records[-1].split(FIELD_SEP)
-            if len(oldest) >= 2 and oldest[1] < cutoff_iso:
-                return
-            if len(records) < (end - start + 1):
-                return
-            start = end + 1
-
-    def _merge_sent_applescript(self, acct, raw):
-        for rec in raw.split(REC_SEP):
-            if not rec.strip():
-                continue
-            parts = rec.split(FIELD_SEP)
-            if len(parts) < 5:
-                continue
-            msg_id, date_s, to_addr, to_name, subject = (
-                parts[0], parts[1], parts[2], parts[3], FIELD_SEP.join(parts[4:]))
-            to_addr = (to_addr or "").lower().strip()
-            if not to_addr:
-                continue
-            key = "sent:%s:%s" % (acct["name"], msg_id)
-            with self.lock:
-                self.messages[key] = {
-                    "key": key,
-                    "source": "applescript",
-                    "rowid": None,
-                    "account": acct["name"],
-                    "mailbox": acct["sentMailbox"],
-                    "id": int(msg_id),
-                    "date": date_s,
-                    "read": True,
-                    "flagged": False,
-                    "fromMe": True,
-                    "toAddr": to_addr,
-                    "toName": to_name or to_addr,
-                    "senderName": "自分",
-                    "senderAddr": acct["name"],
                     "subject": subject or "(件名なし)",
                 }
 
