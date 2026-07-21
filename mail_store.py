@@ -383,12 +383,13 @@ class MailStore(object):
                     if not rec.strip():
                         continue
                     parts = rec.split(FIELD_SEP)
-                    if len(parts) < 6:
+                    if len(parts) < 7:
                         continue
                     typ = parts[0]
                     if typ == "R":
-                        msg_id, date_s, read_s, sender_raw = parts[1], parts[2], parts[3], parts[4]
-                        subject = FIELD_SEP.join(parts[5:])
+                        msg_id, rfc_id, date_s, read_s, sender_raw = \
+                            parts[1], parts[2], parts[3], parts[4], parts[5]
+                        subject = FIELD_SEP.join(parts[6:])
                         name, saddr = parse_sender(sender_raw)
                         key = "as:%s:%s" % (acct["name"], msg_id)
                         try:
@@ -399,14 +400,16 @@ class MailStore(object):
                             self.messages[key] = {
                                 "key": key, "source": "applescript", "rowid": None,
                                 "account": acct["name"], "mailbox": acct["mailbox"],
-                                "id": int(msg_id), "date": date_s, "read": read_s == "true",
+                                "id": int(msg_id), "rfcId": rfc_id or None,
+                                "date": date_s, "read": read_s == "true",
                                 "flagged": False, "senderName": name, "senderAddr": saddr,
                                 "subject": subject or "(件名なし)",
                             }
                         r_count += 1
                     elif typ == "S":
-                        msg_id, date_s, to_addr, to_name = parts[1], parts[2], parts[3], parts[4]
-                        subject = FIELD_SEP.join(parts[5:])
+                        msg_id, rfc_id, date_s, to_addr, to_name = \
+                            parts[1], parts[2], parts[3], parts[4], parts[5]
+                        subject = FIELD_SEP.join(parts[6:])
                         to_addr = (to_addr or "").lower().strip()
                         if not to_addr:
                             continue
@@ -415,7 +418,8 @@ class MailStore(object):
                             self.messages[key] = {
                                 "key": key, "source": "applescript", "rowid": None,
                                 "account": acct["name"], "mailbox": acct.get("sentMailbox", ""),
-                                "id": int(msg_id), "date": date_s, "read": True,
+                                "id": int(msg_id), "rfcId": rfc_id or None,
+                                "date": date_s, "read": True,
                                 "flagged": False, "fromMe": True,
                                 "toAddr": to_addr, "toName": to_name or to_addr,
                                 "senderName": "自分", "senderAddr": acct["name"],
@@ -561,8 +565,10 @@ class MailStore(object):
         if not msg:
             return None
         if msg["source"] == "applescript" and msg.get("id"):
+            # RFC Message-ID(安定・一意)を優先。番号IDはフォールバック。
             return run_osascript("get_content.applescript",
-                                 [msg["account"], msg["mailbox"], msg["id"]], timeout=300)
+                                 [msg["account"], msg["mailbox"], msg["id"],
+                                  msg.get("rfcId") or ""], timeout=300)
         return None  # sqliteモードは本文をDBに持たないため v1 では未対応
 
     def open_in_mail(self, key):
@@ -572,7 +578,8 @@ class MailStore(object):
         if not msg or not msg.get("id"):
             return False
         out = run_osascript("open_message.applescript",
-                            [msg["account"], msg["mailbox"], msg["id"]], timeout=120)
+                            [msg["account"], msg["mailbox"], msg["id"],
+                             msg.get("rfcId") or ""], timeout=120)
         return out.strip() == "1"
 
     def load_account_map(self):

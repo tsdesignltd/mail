@@ -2,8 +2,9 @@
 -- 指定アドレスとの「受信+送信」の全履歴を1アカウント分まとめて取得する。
 -- 受信: 差出人にアドレスを含むもの / 送信: 宛先(受取人)にアドレスを含むもの
 -- 出力: 1レコード = "␟" 区切り、フィールド = "␞" 区切り、先頭フィールドが種別 R/S
---   受信: R␞id␞ISO日時␞既読(true/false)␞差出人␞件名
---   送信: S␞id␞ISO日時(送信日時)␞宛先アドレス␞宛先名␞件名
+--   受信: R␞id␞rfcId␞ISO日時␞既読(true/false)␞差出人␞件名
+--   送信: S␞id␞rfcId␞ISO日時(送信日時)␞宛先アドレス␞宛先名␞件名
+-- rfcId は RFC Message-ID(安定・一意)。本文取得/メール表示の照合に使う。
 on run argv
 	set acctName to item 1 of argv
 	set inName to item 2 of argv
@@ -25,11 +26,15 @@ on run argv
 					repeat with m in rcv
 						try
 							set rid to id of m as text
+							set rfc to ""
+							try
+								set rfc to message id of m
+							end try
 							set ds to my isoDate(date received of m)
 							set rds to (read status of m) as text
 							set snd to sender of m
 							set subj to subject of m
-							set rec to "R" & fieldSep & rid & fieldSep & ds & fieldSep & rds & fieldSep & snd & fieldSep & subj
+							set rec to "R" & fieldSep & rid & fieldSep & rfc & fieldSep & ds & fieldSep & rds & fieldSep & snd & fieldSep & subj
 							copy rec to end of out
 						end try
 					end repeat
@@ -52,6 +57,10 @@ on run argv
 						repeat with m in snt
 							try
 								set rid to id of m as text
+								set rfc to ""
+								try
+									set rfc to message id of m
+								end try
 								set ds to my isoDate(date sent of m)
 								set subj to subject of m
 								set toAddr to ""
@@ -65,7 +74,7 @@ on run argv
 										if nm is not missing value then set toName to nm
 									end try
 								end if
-								set rec to "S" & fieldSep & rid & fieldSep & ds & fieldSep & toAddr & fieldSep & toName & fieldSep & subj
+								set rec to "S" & fieldSep & rid & fieldSep & rfc & fieldSep & ds & fieldSep & toAddr & fieldSep & toName & fieldSep & subj
 								copy rec to end of out
 							end try
 						end repeat
