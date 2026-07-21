@@ -257,6 +257,18 @@ body {
   max-height: 340px; overflow-y: auto;
 }
 .bubble .b-loading { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.bubble .b-open {
+  margin-top: 8px; font-size: 11.5px; padding: 3px 10px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel); color: var(--accent);
+}
+.bubble .b-open:hover { background: var(--accent-soft); }
+.bubble .b-open:disabled { opacity: 0.6; cursor: default; }
+.bubble.from-me .b-open {
+  background: rgba(255, 255, 255, 0.18); color: var(--bubble-out-text);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.bubble.from-me .b-open:hover { background: rgba(255, 255, 255, 0.3); }
 
 /* ---------- spam view ---------- */
 #view-spam { flex: 1; overflow-y: auto; }

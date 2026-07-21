@@ -333,6 +333,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(e)}, 500)
             return self._json(result)
 
+        if u.path == "/api/message/open":
+            key = body.get("key", "")
+            if not key:
+                return self._json({"error": "key required"}, 400)
+            try:
+                ok = store.open_in_mail(key)
+            except Exception as e:
+                return self._json({"error": str(e)}, 500)
+            return self._json({"ok": ok})
+
         if u.path == "/api/spam/move":
             keys = body.get("keys", [])
             result = store.move_to_junk(keys)

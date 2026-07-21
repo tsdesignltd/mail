@@ -390,17 +390,41 @@ function renderThread(addr) {
     const side = m.fromMe ? "from-me" : "from-them";
     const meta = m.fromMe ? `${time} ・自分の返信${acct}`
                           : `${time}${m.read ? "" : " ・未読"}${acct}`;
+    // Mail.app で開けるのは番号ID付き(AppleScript取得)のメールのみ
+    const canOpen = m.source === "applescript" && m.id != null;
+    const openBtn = canOpen
+      ? `<button class="b-open" data-key="${esc(m.key)}" title="Mail.app でこのメールを開く">✉️ メールで開く</button>`
+      : "";
     html += `
     <div class="bubble ${side} ${!m.fromMe && !m.read ? "unread" : ""}" data-key="${esc(m.key)}" data-source="${esc(m.source)}">
       <div class="b-subject">${esc(m.subject)}</div>
       <div class="b-time">${meta}</div>
       <div class="b-content"></div>
+      ${openBtn}
     </div>`;
   }
   $("#bubbles").innerHTML = html;
   $("#bubbles").scrollTop = $("#bubbles").scrollHeight;
   $$("#bubbles .bubble").forEach((el) => {
     el.addEventListener("click", () => toggleBubbleContent(el));
+  });
+  // 「メールで開く」ボタン (バブル本体のトグルとは分離)
+  $$("#bubbles .b-open").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "開いています…";
+      try {
+        const r = await post("/api/message/open", { key: btn.dataset.key });
+        if (!r || !r.ok) toast("Mail.app で開けませんでした");
+      } catch (_) {
+        toast("Mail.app で開けませんでした");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    });
   });
 }
 

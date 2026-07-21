@@ -565,6 +565,16 @@ class MailStore(object):
                                  [msg["account"], msg["mailbox"], msg["id"]], timeout=300)
         return None  # sqliteモードは本文をDBに持たないため v1 では未対応
 
+    def open_in_mail(self, key):
+        """指定メールを Mail.app で開く。成功したら True。"""
+        with self.lock:
+            msg = self.messages.get(key)
+        if not msg or not msg.get("id"):
+            return False
+        out = run_osascript("open_message.applescript",
+                            [msg["account"], msg["mailbox"], msg["id"]], timeout=120)
+        return out.strip() == "1"
+
     def load_account_map(self):
         """メールアドレス → Mail.app アカウント名の対応表 (data/accounts.json)。"""
         p = os.path.join(DATA_DIR, "accounts.json")
