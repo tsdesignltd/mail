@@ -258,8 +258,8 @@ body {
 }
 .bubble.from-me .b-loading { color: rgba(255, 255, 255, 0.85); }
 .bubble:hover { filter: brightness(0.97); }
-.bubble .b-subject { font-weight: 600; font-size: 13.5px; }
-.bubble .b-time { color: var(--muted); font-size: 11px; margin-top: 4px; padding-right: 22px; }
+.bubble .b-subject { font-weight: 600; font-size: 13.5px; padding-right: 22px; }
+.bubble .b-time { color: var(--muted); font-size: 11px; margin-top: 4px; }
 .bubble.unread { border-left: 3px solid var(--accent); }
 .bubble .b-body {
   margin-top: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word;
@@ -269,7 +269,7 @@ body {
 .bubble .b-loading { color: var(--muted); font-size: 12px; margin-top: 6px; }
 /* 右下の小さな封筒アイコン(アイコンのみ) */
 .bubble .b-open {
-  position: absolute; right: 8px; bottom: 6px;
+  position: absolute; right: 10px; top: 9px;
   border: none; background: transparent; cursor: pointer;
   font-size: 13px; line-height: 1; padding: 2px; border-radius: 6px;
   opacity: 0.55; transition: opacity 0.12s ease;
