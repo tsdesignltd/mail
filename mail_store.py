@@ -432,7 +432,7 @@ class MailStore(object):
                 self.sender_syncing = False
         return {"received": r_count, "sent": s_count}
 
-    def sync_applescript(self, per_account_limit=100, excluded=None):
+    def sync_applescript(self, per_account_limit=100, excluded=None, full=False):
         excluded = set(excluded or [])
         st = self.status
         with st.lock:
@@ -449,11 +449,19 @@ class MailStore(object):
 
             with st.lock:
                 st.account_errors = {}
+            # 差分同期の基準: 同期開始前のキャッシュ済みキー一覧
+            presync_keys = set(self.messages.keys())
             # 全体同期は受信のみ(左側)。自分の返信(右側)は差出人個別の同期でのみ取得する。
             for acct in accounts:
                 try:
                     if acct["count"] > 0:
-                        self._fetch_account_chunked(acct, per_account_limit)
+                        # キャッシュ済みのアカウントは差分のみ(full 指定時は全取得)
+                        has_cache = any(
+                            k.startswith("as:%s:" % acct["name"]) for k in presync_keys)
+                        self._fetch_account_chunked(
+                            acct, per_account_limit,
+                            incremental=(has_cache and not full),
+                            known_keys=presync_keys)
                 except Exception as e:
                     with st.lock:
                         st.account_errors[acct["name"]] = str(e)
@@ -474,18 +482,23 @@ class MailStore(object):
 
     CHUNK_SIZE = 50
 
-    def _fetch_account_chunked(self, acct, cap):
-        """過去 CUTOFF_DAYS 日分を 50通ずつ分割取得する。
-        巨大メールボックスでの一括取得は Mail の接続が切れる(-609)ため。
+    def _fetch_account_chunked(self, acct, cap, incremental=False, known_keys=None):
+        """INBOX を 50通ずつ新しい順に分割取得する(巨大MBは一括だと -609 で切れるため)。
+
+        incremental=True の場合は「差分同期」: 既にキャッシュ済み(known_keys)の
+        メールに到達したチャンクで停止する。新着は常に先頭にあるため、既知メールに
+        当たった時点でそれ以降は取得済みとみなせる。初回(キャッシュ無し)は full 取得。
         チャンク失敗は1回リトライし、2回失敗したら途中まで保存して打ち切る。"""
         st = self.status
+        known_keys = known_keys or set()
         cutoff_iso = (datetime.now() - timedelta(days=CUTOFF_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
         start = 1
         fetched = 0
         while fetched < cap:
             end = min(start + self.CHUNK_SIZE - 1, start + cap - fetched - 1)
             with st.lock:
-                st.progress = "%s から取得中... (%d件目〜)" % (acct["name"], start)
+                label = "差分を確認中" if incremental else "取得中"
+                st.progress = "%s から%s... (%d件目〜)" % (acct["name"], label, start)
             raw = None
             for attempt in (1, 2):
                 try:
@@ -506,6 +519,12 @@ class MailStore(object):
             self._merge_applescript(acct, raw)
             self._save_cache()
             fetched += len(records)
+            # 差分同期: このチャンクに既知メールが含まれていれば、以降は取得済み
+            if incremental:
+                for r in records:
+                    mid = r.split(FIELD_SEP)[0]
+                    if ("as:%s:%s" % (acct["name"], mid)) in known_keys:
+                        return
             # このチャンクの最古が期間外なら打ち切り (1が最新の前提)
             oldest = records[-1].split(FIELD_SEP)
             if len(oldest) >= 2 and oldest[1] < cutoff_iso:
@@ -542,16 +561,16 @@ class MailStore(object):
                 }
 
     # ---------- 共通操作 ----------
-    def sync(self, per_account_limit=100, excluded=None):
+    def sync(self, per_account_limit=100, excluded=None, full=False):
         if self.status.running:
             return False
         excluded = set(excluded or [])
-        if self.sqlite_available():
-            t = threading.Thread(target=self.sync_sqlite,
-                                 kwargs={"excluded": excluded}, daemon=True)
-        else:
-            t = threading.Thread(target=self.sync_applescript,
-                                 args=(per_account_limit, excluded), daemon=True)
+        # 高速モード(sqlite)は使わない方針。AppleScript の差分同期を用いる。
+        # full=True で全取得(初回・再構築用)、通常は差分のみ。
+        t = threading.Thread(
+            target=self.sync_applescript,
+            kwargs={"per_account_limit": per_account_limit,
+                    "excluded": excluded, "full": full}, daemon=True)
         t.start()
         return True
 

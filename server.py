@@ -318,7 +318,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if u.path == "/api/sync":
             started = store.sync(per_account_limit=int(settings.get("perAccountLimit", 300)),
-                                 excluded=settings.get("excludedAccounts", []))
+                                 excluded=settings.get("excludedAccounts", []),
+                                 full=bool(body.get("full")))
             return self._json({"started": started, "status": store.status.snapshot()})
 
         if u.path == "/api/sync/sender":

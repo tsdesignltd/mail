@@ -175,8 +175,20 @@ function renderSyncStatus(sync) {
 }
 
 $("#syncBtn").addEventListener("click", async () => {
-  const r = await post("/api/sync");
-  if (r.started) toast("同期を開始しました");
+  const r = await post("/api/sync");   // 差分同期(新着のみ)
+  if (r.started) toast("同期を開始しました(新着を確認中)");
+  renderSyncStatus(r.status);
+});
+$("#fullResyncBtn").addEventListener("click", async () => {
+  if (!confirm("全アカウントを最初から読み込み直します。時間がかかりますがよろしいですか?")) return;
+  const r = await post("/api/sync", { full: true });
+  if (r.started) toast("全体の再取得を開始しました");
+  else toast("すでに同期中です");
+  // 設定画面から受信タブへ戻して進捗を見せる
+  $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "inbox"));
+  ["inbox", "spam", "settings"].forEach((t) =>
+    $("#view-" + t).classList.toggle("hidden", t !== "inbox"));
+  state.tab = "inbox";
   renderSyncStatus(r.status);
 });
 

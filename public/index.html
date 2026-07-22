@@ -96,12 +96,17 @@
             <option value="500">500件</option>
           </select>
         </label>
-        <p class="hint">同期は過去1ヶ月分のメールを自動で全部取得します。この件数はその安全上限です(メールが非常に多い場合の保護)。</p>
+        <p class="hint">初回の全取得で読み込む1アカウントあたりの上限です(過去1ヶ月分・メールが非常に多い場合の保護)。2回目以降は新着だけの差分同期になります。</p>
       </div>
       <div class="setting-row">
         <h3>同期対象アカウント</h3>
         <p class="hint">チェックを外したアカウントは同期・表示の対象外になります。</p>
         <div id="accountToggles" class="chip-list"></div>
+      </div>
+      <div class="setting-row">
+        <h3>同期の方式</h3>
+        <p class="hint">右上の「同期」は前回以降の<strong>新着だけ</strong>を取得します(差分同期)。初回のみ時間をかけて全部読み込み、以降は高速です。表示がおかしい時やキャッシュを作り直したい時は全体を再取得してください。</p>
+        <button id="fullResyncBtn" class="btn">全体を再取得(時間がかかります)</button>
       </div>
       <div class="setting-row">
         <h3>動作モード</h3>
