@@ -76,6 +76,15 @@ body {
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn.small { padding: 5px 10px; font-size: 12px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
+/* 同期中スピナー(回転) */
+.btn.syncing:disabled { opacity: 0.85; }
+.spinner {
+  display: inline-block; width: 11px; height: 11px;
+  margin-right: 6px; vertical-align: -1px; box-sizing: border-box;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: md-spin 0.7s linear infinite;
+}
+@keyframes md-spin { to { transform: rotate(360deg); } }
 
 /* ---------- inbox (thumbnail dashboard) ---------- */
 #view-inbox { display: flex; flex: 1; min-height: 0; position: relative; }

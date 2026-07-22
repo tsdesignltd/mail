@@ -146,7 +146,7 @@ function renderSyncStatus(sync) {
   const el = $("#syncStatus");
   const btn = $("#syncBtn");
   if (sync.running) {
-    el.textContent = "同期中: " + (sync.progress || "...");
+    el.innerHTML = `<span class="spinner"></span>同期中: ${esc(sync.progress || "...")}`;
     btn.disabled = true;
     if (!state.syncTimer) {
       state.syncTimer = setInterval(async () => {
@@ -316,8 +316,9 @@ async function syncSender(addr, opts) {
   const btn = $("#syncSenderBtn");
   if (state.senderSyncing) return;         // 二重起動防止
   state.senderSyncing = true;
-  const orig = btn.textContent;
-  btn.textContent = "同期中…";
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<span class="spinner"></span>同期中…`;
+  btn.classList.add("syncing");
   btn.disabled = true;
   try {
     const r = await post("/api/sync/sender", { addr });
@@ -339,7 +340,8 @@ async function syncSender(addr, opts) {
   } finally {
     state.senderSyncing = false;
     btn.disabled = false;
-    btn.textContent = orig;
+    btn.classList.remove("syncing");
+    btn.innerHTML = orig;
   }
 }
 $("#syncSenderBtn").addEventListener("click", () => {
