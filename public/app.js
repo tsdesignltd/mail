@@ -422,8 +422,12 @@ function renderThread(addr) {
   $$("#bubbles .bubble").forEach((el) => {
     el.addEventListener("click", () => toggleBubbleContent(el));
   });
-  // 「メールで開く」ボタン (バブル本体のトグルとは分離)
-  $$("#bubbles .b-open").forEach((btn) => {
+  wireOpenMailButtons("#bubbles .b-open");
+}
+
+// 「✉️ メールで開く」ボタン共通処理。親要素のクリックとは分離(stopPropagation)。
+function wireOpenMailButtons(selector) {
+  $$(selector).forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       btn.disabled = true;
@@ -437,6 +441,12 @@ function renderThread(addr) {
       }
     });
   });
+}
+
+// メールを Mail.app で開く封筒アイコン(番号ID付きのメールのみ)。受信タイムラインと共通。
+function openMailIcon(m) {
+  if (!(m.source === "applescript" && m.id != null)) return "";
+  return `<button class="b-open" data-key="${esc(m.key)}" title="Mail.app でこのメールを開く" aria-label="Mail.app で開く">✉️</button>`;
 }
 
 async function toggleBubbleContent(el) {
@@ -497,7 +507,10 @@ function mailItemHtml(m, cls, checked) {
   <div class="mail-item ${cls}">
     <input type="checkbox" class="spam-check" data-key="${esc(m.key)}" data-addr="${esc(m.senderAddr)}" ${checked ? "checked" : ""}>
     <div class="mail-main">
-      <div class="mail-subject">${esc(m.subject)}</div>
+      <div class="mail-subject-row">
+        <div class="mail-subject">${esc(m.subject)}</div>
+        ${openMailIcon(m)}
+      </div>
       <div class="mail-from">${esc(m.senderName)} &lt;${esc(m.senderAddr)}&gt; ・ ${fmtDate(m.date)} ・ スコア ${m.spamScore}</div>
       <div class="mail-reasons">${reasons}</div>
     </div>
@@ -518,6 +531,8 @@ function renderSpam() {
     ? ov.grey.map((m) => mailItemHtml(m, "grey", false)).join("")
     : `<p class="hint">グレーゾーンのメールはありません</p>`;
   $("#aiJudgeBtn").classList.toggle("hidden", !(ov.aiAvailable && ov.grey.length));
+  wireOpenMailButtons("#spamItems .b-open");
+  wireOpenMailButtons("#greyItems .b-open");
 
   $$("#greyItems .act-spam").forEach((b) =>
     b.addEventListener("click", async () => {

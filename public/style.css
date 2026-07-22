@@ -298,6 +298,17 @@ body {
 .mail-item.spam { border-left: 4px solid var(--danger); }
 .mail-item input[type=checkbox] { margin-top: 4px; }
 .mail-main { flex: 1; min-width: 0; }
+.mail-subject-row { display: flex; align-items: flex-start; gap: 10px; }
+.mail-subject-row .mail-subject { flex: 1; min-width: 0; }
+/* メールで開く封筒アイコン(受信タイムラインと同じ見た目) */
+.mail-item .b-open {
+  flex-shrink: 0; border: none; background: transparent; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 2px; border-radius: 6px;
+  opacity: 0.55; transition: opacity 0.12s ease;
+}
+.mail-item:hover .b-open { opacity: 0.9; }
+.mail-item .b-open:hover { opacity: 1; }
+.mail-item .b-open:disabled { opacity: 0.35; cursor: default; }
 .mail-subject { font-weight: 600; }
 .mail-from { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .mail-reasons { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
