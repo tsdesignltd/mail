@@ -247,23 +247,6 @@ function renderDash() {
     b.textContent = { latest: "受信日時", name: "名前", addr: "メールアドレス" }[b.dataset.sort] + arrow;
   });
 
-  // クリックで会話を開く
-  $$("#favTiles .tile, #allList .all-row").forEach((el) => {
-    el.addEventListener("click", () => openThread(el.dataset.addr));
-  });
-
-  // ✕ でよく使う相手から外す (タイルのクリックとは分離)
-  $$("#favTiles .tile-x").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await post("/api/favorites", { sender: btn.dataset.addr, action: btn.dataset.action });
-      toast(btn.dataset.action === "dismiss"
-        ? "外しました。この相手は今後自動追加されません"
-        : "よく使う相手から外しました");
-      loadOverview();
-    });
-  });
-
   const spamTotal = ov.spam.length + ov.grey.length;
   const badge = $("#spamBadge");
   badge.classList.toggle("hidden", spamTotal === 0);
@@ -300,7 +283,32 @@ function rowHtml(t) {
   </div>`;
 }
 
-$("#senderSearch").addEventListener("input", renderDash);
+/* ダッシュボードのクリックは委譲(再描画ごとのリスナー付け直しを避ける) */
+$("#favTiles").addEventListener("click", async (e) => {
+  const x = e.target.closest(".tile-x");
+  if (x) {
+    e.stopPropagation();
+    await post("/api/favorites", { sender: x.dataset.addr, action: x.dataset.action });
+    toast(x.dataset.action === "dismiss"
+      ? "外しました。この相手は今後自動追加されません"
+      : "よく使う相手から外しました");
+    loadOverview();
+    return;
+  }
+  const tile = e.target.closest(".tile");
+  if (tile) openThread(tile.dataset.addr);
+});
+$("#allList").addEventListener("click", (e) => {
+  const row = e.target.closest(".all-row");
+  if (row) openThread(row.dataset.addr);
+});
+
+// 検索はデバウンス(1キーごとの全再描画を避ける)
+let searchTimer = null;
+$("#senderSearch").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderDash, 150);
+});
 $$(".sort-btn").forEach((b) =>
   b.addEventListener("click", () => {
     if (state.sortKey === b.dataset.sort) {
@@ -420,29 +428,30 @@ function renderThread(addr) {
   }
   $("#bubbles").innerHTML = html;
   $("#bubbles").scrollTop = $("#bubbles").scrollHeight;
-  $$("#bubbles .bubble").forEach((el) => {
-    el.addEventListener("click", () => toggleBubbleContent(el));
-  });
-  wireOpenMailButtons("#bubbles .b-open");
 }
 
-// 「✉️ メールで開く」ボタン共通処理。親要素のクリックとは分離(stopPropagation)。
-function wireOpenMailButtons(selector) {
-  $$(selector).forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      btn.disabled = true;
-      try {
-        const r = await post("/api/message/open", { key: btn.dataset.key });
-        if (!r || !r.ok) toast("Mail.app で開けませんでした");
-      } catch (_) {
-        toast("Mail.app で開けませんでした");
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  });
-}
+// バブルのクリックは委譲(封筒アイコンは共通ハンドラに任せる)
+$("#bubbles").addEventListener("click", (e) => {
+  if (e.target.closest(".b-open")) return;
+  const b = e.target.closest(".bubble");
+  if (b) toggleBubbleContent(b);
+});
+
+// 「✉️ メールで開く」共通処理(document で委譲、全画面共通)
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".b-open");
+  if (!btn) return;
+  e.stopPropagation();
+  btn.disabled = true;
+  try {
+    const r = await post("/api/message/open", { key: btn.dataset.key });
+    if (!r || !r.ok) toast("Mail.app で開けませんでした");
+  } catch (_) {
+    toast("Mail.app で開けませんでした");
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // メールを Mail.app で開く封筒アイコン(番号ID付きのメールのみ)。受信タイムラインと共通。
 function openMailIcon(m) {
@@ -532,22 +541,24 @@ function renderSpam() {
     ? ov.grey.map((m) => mailItemHtml(m, "grey", false)).join("")
     : `<p class="hint">グレーゾーンのメールはありません</p>`;
   $("#aiJudgeBtn").classList.toggle("hidden", !(ov.aiAvailable && ov.grey.length));
-  wireOpenMailButtons("#spamItems .b-open");
-  wireOpenMailButtons("#greyItems .b-open");
-
-  $$("#greyItems .act-spam").forEach((b) =>
-    b.addEventListener("click", async () => {
-      const r = await post("/api/spam/move", { keys: [b.dataset.key], senders: [b.dataset.addr], block: true });
-      toast(moveResultText(r));
-      loadOverview();
-    }));
-  $$("#greyItems .act-ok").forEach((b) =>
-    b.addEventListener("click", async () => {
-      await post("/api/spam/trust", { sender: b.dataset.addr });
-      toast("信頼リストに追加しました");
-      loadOverview();
-    }));
 }
+
+// グレーゾーンの「迷惑」「問題なし」も委譲(封筒アイコンは共通ハンドラが処理)
+$("#greyItems").addEventListener("click", async (e) => {
+  const spamBtn = e.target.closest(".act-spam");
+  if (spamBtn) {
+    const r = await post("/api/spam/move", { keys: [spamBtn.dataset.key], senders: [spamBtn.dataset.addr], block: true });
+    toast(moveResultText(r));
+    loadOverview();
+    return;
+  }
+  const okBtn = e.target.closest(".act-ok");
+  if (okBtn) {
+    await post("/api/spam/trust", { sender: okBtn.dataset.addr });
+    toast("信頼リストに追加しました");
+    loadOverview();
+  }
+});
 
 function moveResultText(r) {
   let msg = `${r.moved} 件を仕訳しました`;

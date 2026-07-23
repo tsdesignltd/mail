@@ -37,6 +37,7 @@ DEFAULT_SETTINGS = {
 
 store = MailStore()
 settings_lock = threading.Lock()
+SETTINGS_VERSION = [0]  # 設定変更のたびに増える(overviewキャッシュの無効化用)
 
 
 def load_settings():
@@ -60,6 +61,7 @@ def save_settings(s):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(s, f, ensure_ascii=False, indent=2)
         os.replace(tmp, SETTINGS_PATH)
+        SETTINGS_VERSION[0] += 1
 
 
 def claude_cli():
@@ -85,9 +87,25 @@ def apply_restored_senders(settings):
     return settings
 
 
+_overview_lock = threading.Lock()
+_overview_cache = {"key": None, "ov": None}
+
+
 def build_overview():
-    """UI 用のまとめ: 差出人別スレッド・迷惑候補・よく使う相手。"""
+    """UI 用のまとめ: 差出人別スレッド・迷惑候補・よく使う相手。
+
+    迷惑判定・スレッド構築はメール数に比例して重い(数千件で数十ms)ため、
+    (メールデータ, 設定) が変わらない限り前回の結果を再利用する。
+    sync 進捗などの軽い情報だけ毎回更新する。"""
     settings = apply_restored_senders(load_settings())
+    cache_key = (store.version, SETTINGS_VERSION[0])
+    with _overview_lock:
+        cached = _overview_cache["ov"] if _overview_cache["key"] == cache_key else None
+    if cached is not None:
+        cached["sync"] = store.status.snapshot()
+        cached["fastMode"] = store.sqlite_available()
+        cached["aiAvailable"] = claude_cli() is not None
+        return cached
     excluded = set(settings.get("excludedAccounts", []))
     messages = [m for m in store.all_messages()
                 if m.get("account") not in excluded]
@@ -177,7 +195,7 @@ def build_overview():
     # 設定画面用: Mail.app に存在する全アカウント (未同期・除外中も含む)
     all_accounts = sorted(set(store.load_account_map().keys()) | set(accounts) | excluded)
 
-    return {
+    ov = {
         "threads": thread_list,
         "favorites": favorites,
         "spam": spam,
@@ -192,6 +210,10 @@ def build_overview():
         "spamMailbox": "各アカウントの迷惑メールフォルダ",
         "cutoffDays": CUTOFF_DAYS,
     }
+    with _overview_lock:
+        _overview_cache["key"] = cache_key
+        _overview_cache["ov"] = ov
+    return ov
 
 
 def refresh_account_map():

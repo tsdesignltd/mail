@@ -93,6 +93,7 @@ class MailStore(object):
         self.restored = set()  # 迷惑ではないと指定された差出人 (未処理分)
         self.sender_lock = threading.Lock()
         self.sender_syncing = False  # 差出人個別同期の実行中フラグ
+        self.version = 0  # メールデータが変わるたびに増える(overviewキャッシュの無効化用)
         self._load_cache()
         self._load_moved()
 
@@ -156,6 +157,7 @@ class MailStore(object):
                 "lastSync": self.status.last_sync,
             }, f, ensure_ascii=False)
         os.replace(tmp, CACHE_PATH)
+        self.version += 1  # メールデータ変更を overview キャッシュに伝える
 
     # ---------- Envelope Index (高速モード) ----------
     def envelope_index_path(self):
