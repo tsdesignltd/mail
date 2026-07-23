@@ -360,7 +360,11 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/read/all":
             sender = (body.get("sender") or "").strip() or None
             account = (body.get("account") or "").strip() or None
+            # キャッシュ(表示)は即座に既読化。差出人指定時は Mail.app 側も
+            # バックグラウンドで既読化する(件数が多いと時間がかかるため非同期)。
             n = store.mark_read(sender=sender, account=account)
+            if sender:
+                store.mark_sender_read_async(sender)
             return self._json({"marked": n})
 
         if u.path == "/api/message/open":

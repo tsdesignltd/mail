@@ -56,8 +56,9 @@ Mail.app（仕訳・本文取得・移動は常に AppleScript 経由）
 | `list_accounts.applescript` | 有効アカウントの受信MB/送信MB名と件数一覧（送信MBは走査で解決） |
 | `fetch_chunk.applescript` | INBOXの start〜end 番目を50通ずつ取得（巨大MB対策・差分同期にも使用） |
 | `fetch_sender.applescript` | **指定アドレスとの受信+送信の全履歴を1アカウント分取得**（差出人個別同期用）。id・RFC Message-ID も返す |
-| `get_content.applescript` | 1通の本文取得。**RFC Message-ID優先**・番号IDはフォールバック |
+| `get_content.applescript` | 1通の本文取得。**RFC Message-ID優先**・番号IDはフォールバック。取得した1通を Mail.app でも既読化 |
 | `open_message.applescript` | 1通を Mail.app で別ウインドウ表示（RFC id 優先） |
+| `mark_sender_read.applescript` | 指定差出人の受信メールを Mail.app で既読化（`whose sender contains`＋1通ずつ set） |
 | `move_to_junk.applescript` | 各アカウント自身の迷惑フォルダへ移動（現行の仕訳先） |
 | `move_messages.applescript` / `move_by_msgid.applescript` | 旧: ローカルMBへ移動（現在は未使用だが残置） |
 
@@ -103,8 +104,12 @@ Mail.app（仕訳・本文取得・移動は常に AppleScript 経由）
 14. **差分（増分）同期**: 右上「同期」は前回以降の**新着だけ**取得（新しい順に取得し既知メールに当たったら停止）。初回のみフル。設定に「全体を再取得」ボタン（`POST /api/sync {full:true}`）。`store.version` でキャッシュ変更を追跡。高速モード(sqlite)は使わない方針に。
 15. **自動同期（1時間ごと）**: `autoSync` 設定（既定OFF）。**ブラウザ側タイマー**で MailDeck を開いている間1時間毎に差分同期し画面も更新。**設定画面のチェックボックス**と**メニューバーのON/OFFトグル**の両方から切替（連動）。
 16. **パフォーマンス最適化**: `build_overview` を**メモ化**（`(store.version, SETTINGS_VERSION)` をキー。実測 37ms→9ms/2988件）。フロントはクリックを**イベント委譲**に（描画毎の約950リスナー付け直しを廃止）。検索を150msデバウンス。
-17. **差出人ごとの既読ボタン**（`mark_read` / `POST /api/read/all {sender}`）: 「すべての差出人」一覧の各行（未読がある行のみ・ホバー表示）に「✓ 既読」。**MailDeck上のバッジのみ既読化**（Mail.app無変更。上記の whose 遅延のため。全体を再取得で実状態に戻る）。
-18. **本文を開いたら Mail.app でも既読に**: 会話でバブルの本文を開く（`get_content`）と、その1通を **Mail.app 側でも既読**にする（`set read status ... to true`）＋キャッシュも既読。1通だけなので高速（一括既読の whose 遅延問題は無い）。フロントは全再描画せずそのバブルの未読表示だけ局所的に消す（`markBubbleReadLocal`）。**「一括既読(17)」は表示のみ、「本文を開いた既読(18)」は Mail.app にも反映**、と役割が違う点に注意。
+17. **差出人ごとの既読**（`mark_read` / `mark_sender_read_async` / `POST /api/read/all {sender}`）:
+    - ボタンは2ヶ所 —「すべての差出人」一覧の各行（未読行のみ・ホバー表示）の「✓ 既読」と、**会話ヘッダーの差出人名の隣**の「✓ すべて既読」（`#threadReadBtn`、未読時のみ表示）。
+    - **キャッシュ（表示）は即座に既読**（`mark_read`）→バッジが消える。フロントは全再描画せず局所更新。
+    - **差出人指定時は Mail.app 側もバックグラウンドで既読化**（`mark_sender_read.applescript` = 各アカウントの受信MBで `whose sender contains addr` → 1通ずつ `set read status`。バルク set は All Mail 参照で失敗するため）。件数が多いと数十秒かかるので非同期。
+    - `account`指定/全体（sender無し）は**キャッシュのみ**（全差出人を Mail.app 既読化すると whose が遅く非現実的なため）。
+18. **本文を開いたら Mail.app でも既読に**: 会話でバブルの本文を開く（`get_content`）と、その1通を **Mail.app 側でも既読**にする（`set read status ... to true`）＋キャッシュも既読。1通だけなので高速。フロントは全再描画せずそのバブルの未読表示だけ局所的に消す（`markBubbleReadLocal`）。
 
 ---
 

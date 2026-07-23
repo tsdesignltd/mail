@@ -601,6 +601,35 @@ class MailStore(object):
             self._save_cache()
         return n
 
+    def mark_sender_read_in_mail(self, addr):
+        """指定差出人の受信メールを Mail.app 側でも既読にする(バックグラウンド想定)。
+        そのアドレスの受信メールがある各アカウントの受信MBで1通ずつ既読化する。
+        大量差出人だと時間がかかるためバックグラウンドで呼ぶ。"""
+        addr = (addr or "").lower().strip()
+        if not addr:
+            return 0
+        accts = {}  # account -> inbox mailbox name
+        with self.lock:
+            for m in self.messages.values():
+                if m.get("fromMe"):
+                    continue
+                if m.get("senderAddr") == addr and m.get("account"):
+                    accts.setdefault(m["account"], m.get("mailbox") or "INBOX")
+        n = 0
+        for acct, mbox in accts.items():
+            try:
+                out = run_osascript("mark_sender_read.applescript",
+                                    [acct, mbox, addr], timeout=600)
+                n += int((out or "0").strip() or 0)
+            except Exception:
+                pass
+        return n
+
+    def mark_sender_read_async(self, addr):
+        """mark_sender_read_in_mail をバックグラウンドで実行(UIをブロックしない)。"""
+        threading.Thread(target=self.mark_sender_read_in_mail,
+                         args=(addr,), daemon=True).start()
+
     def get_content(self, key):
         with self.lock:
             msg = self.messages.get(key)

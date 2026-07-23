@@ -381,6 +381,16 @@ async function syncSender(addr, opts) {
 $("#syncSenderBtn").addEventListener("click", () => {
   if (state.activeSender) syncSender(state.activeSender, { auto: false });
 });
+// スレッドの「すべて既読」: この差出人を既読化(Mail.app にもバックグラウンド反映)
+$("#threadReadBtn").addEventListener("click", async () => {
+  const addr = state.activeSender;
+  if (!addr) return;
+  const r = await post("/api/read/all", { sender: addr });
+  toast(r.marked ? `${r.marked} 件を既読にしました` : "未読はありませんでした");
+  // スクロールを乱さないよう、開いているスレッドの未読表示だけ局所更新
+  $$("#bubbles .bubble.unread").forEach((el) => markBubbleReadLocal(el));
+  $("#threadReadBtn").classList.add("hidden");
+});
 function backToList() {
   $("#threadOverlay").classList.add("hidden");
   state.activeSender = null;
@@ -407,6 +417,8 @@ function renderThread(addr) {
   const pinned = favSet.has(addr);
   $("#pinBtn").textContent = pinned ? "★ よく使う相手から外す" : "★ よく使う相手に追加";
   $("#pinBtn").dataset.action = pinned ? "unpin" : "pin";
+  // 未読がある時だけ「すべて既読」ボタンを出す
+  $("#threadReadBtn").classList.toggle("hidden", !(t && t.unread));
 
   if (!t) {
     $("#bubbles").innerHTML = `<div class="empty-state"><p>この差出人からの最近のメールはありません</p></div>`;
