@@ -606,6 +606,7 @@ function renderSettings() {
   if (!ov) return;
   const s = ov.settings;
   $("#autoFavToggle").checked = !!s.autoFavorite;
+  $("#autoSyncToggle").checked = !!s.autoSync;
   $("#limitSelect").value = String(s.perAccountLimit || 100);
   $("#modeInfo").textContent = ov.fastMode
     ? "高速モード: Mail のローカルデータベースを直接読んでいます。"
@@ -648,6 +649,29 @@ $("#autoFavToggle").addEventListener("change", async (e) => {
   await post("/api/settings", { autoFavorite: e.target.checked });
   loadOverview();
 });
+$("#autoSyncToggle").addEventListener("change", async (e) => {
+  await post("/api/settings", { autoSync: e.target.checked });
+  state.lastAutoSync = Date.now();  // 有効化直後にすぐ走らないよう基準を更新
+  toast(e.target.checked ? "自動同期をONにしました(1時間ごと)" : "自動同期をOFFにしました");
+  loadOverview();
+});
+
+/* ---------- 自動同期(MailDeckを開いている間、1時間ごとに差分同期) ---------- */
+const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000;
+state.lastAutoSync = Date.now();
+setInterval(async () => {
+  const ov = state.overview;
+  if (!ov || !ov.settings.autoSync) return;      // OFFなら何もしない
+  if (ov.sync && ov.sync.running) return;         // 同期中はスキップ
+  if (state.senderSyncing) return;                // 個別同期中もスキップ
+  if (Date.now() - state.lastAutoSync < AUTO_SYNC_INTERVAL_MS) return;
+  state.lastAutoSync = Date.now();
+  const r = await post("/api/sync");              // 差分同期
+  if (r.started) {
+    toast("自動同期を実行中…");
+    renderSyncStatus(r.status);                   // 進捗表示→完了で自動的に画面更新
+  }
+}, 60 * 1000);  // 1分ごとに条件を確認
 $("#limitSelect").addEventListener("change", async (e) => {
   await post("/api/settings", { perAccountLimit: parseInt(e.target.value, 10) });
 });

@@ -32,6 +32,7 @@ DEFAULT_SETTINGS = {
     "autoFavorite": True,
     "perAccountLimit": 300,  # 1アカウントの最大取得件数 (過去1ヶ月分の安全上限)
     "excludedAccounts": [],  # 同期対象から外すアカウント
+    "autoSync": False,       # MailDeckを開いている間、1時間毎に自動で差分同期
 }
 
 store = MailStore()

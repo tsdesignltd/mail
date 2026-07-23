@@ -328,6 +328,7 @@ body {
 .settings-wrap h2 { margin-bottom: 16px; }
 .setting-row { margin-bottom: 22px; }
 .setting-row h3 { font-size: 14px; margin-bottom: 8px; }
+.auto-sync-row { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0 12px; }
 .setting-row select { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
