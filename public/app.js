@@ -122,6 +122,7 @@ async function loadOverview() {
   renderDash();
   renderSpam();
   renderSettings();
+  renderAutoSyncNav();
   renderSyncStatus(ov.sync);
   if (state.activeSender && !$("#threadOverlay").classList.contains("hidden")) {
     renderThread(state.activeSender);
@@ -649,12 +650,23 @@ $("#autoFavToggle").addEventListener("change", async (e) => {
   await post("/api/settings", { autoFavorite: e.target.checked });
   loadOverview();
 });
-$("#autoSyncToggle").addEventListener("change", async (e) => {
-  await post("/api/settings", { autoSync: e.target.checked });
+// メニューバー / 設定 で共通の自動同期トグル
+function renderAutoSyncNav() {
+  const on = !!(state.overview && state.overview.settings.autoSync);
+  const btn = $("#autoSyncNav");
+  if (!btn) return;
+  btn.textContent = "自動同期 " + (on ? "ON" : "OFF");
+  btn.classList.toggle("on", on);
+}
+async function setAutoSync(on) {
+  await post("/api/settings", { autoSync: on });
   state.lastAutoSync = Date.now();  // 有効化直後にすぐ走らないよう基準を更新
-  toast(e.target.checked ? "自動同期をONにしました(1時間ごと)" : "自動同期をOFFにしました");
+  toast(on ? "自動同期をONにしました(1時間ごと)" : "自動同期をOFFにしました");
   loadOverview();
-});
+}
+$("#autoSyncToggle").addEventListener("change", (e) => setAutoSync(e.target.checked));
+$("#autoSyncNav").addEventListener("click", () =>
+  setAutoSync(!(state.overview && state.overview.settings.autoSync)));
 
 /* ---------- 自動同期(MailDeckを開いている間、1時間ごとに差分同期) ---------- */
 const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000;

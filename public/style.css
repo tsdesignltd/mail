@@ -60,6 +60,21 @@ body {
 }
 .tab:hover { background: var(--bg); }
 .tab.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+/* 自動同期 ON/OFF トグル (メニューバー) */
+.nav-toggle {
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 12.5px;
+  white-space: nowrap; margin-left: 6px;
+}
+.nav-toggle::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); margin-right: 6px; vertical-align: 1px;
+}
+.nav-toggle:hover { background: var(--bg); }
+.nav-toggle.on {
+  background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600;
+}
+.nav-toggle.on::before { background: var(--accent); }
 .badge {
   background: var(--danger); color: #fff; border-radius: 10px;
   font-size: 11px; padding: 1px 7px; margin-left: 4px;
