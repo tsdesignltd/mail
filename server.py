@@ -357,6 +357,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(e)}, 500)
             return self._json(result)
 
+        if u.path == "/api/read/all":
+            sender = (body.get("sender") or "").strip() or None
+            account = (body.get("account") or "").strip() or None
+            n = store.mark_read(sender=sender, account=account)
+            return self._json({"marked": n})
+
         if u.path == "/api/message/open":
             key = body.get("key", "")
             if not key:

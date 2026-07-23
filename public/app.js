@@ -271,6 +271,10 @@ function tileHtml(t) {
 
 function rowHtml(t) {
   const unread = t.unread ? `<span class="unread-dot">${t.unread}</span>` : "<span></span>";
+  // 未読がある差出人だけ「既読」ボタンを出す(無い行はグリッド維持のため空スロット)
+  const readBtn = t.unread
+    ? `<button class="row-read" data-addr="${esc(t.addr)}" title="この差出人を既読にする(MailDeck上の表示のみ)">✓ 既読</button>`
+    : `<span></span>`;
   return `
   <div class="all-row" data-addr="${esc(t.addr)}">
     ${unread}
@@ -279,6 +283,7 @@ function rowHtml(t) {
       <div class="r-name">${esc(t.name)}</div>
       <div class="r-addr">${esc(t.addr)}</div>
     </div>
+    ${readBtn}
     <div class="r-date">${fmtDate(t.latest)}</div>
   </div>`;
 }
@@ -298,7 +303,15 @@ $("#favTiles").addEventListener("click", async (e) => {
   const tile = e.target.closest(".tile");
   if (tile) openThread(tile.dataset.addr);
 });
-$("#allList").addEventListener("click", (e) => {
+$("#allList").addEventListener("click", async (e) => {
+  const readBtn = e.target.closest(".row-read");
+  if (readBtn) {
+    e.stopPropagation();
+    const r = await post("/api/read/all", { sender: readBtn.dataset.addr });
+    toast(r.marked ? `${r.marked} 件を既読にしました` : "未読はありませんでした");
+    loadOverview();
+    return;
+  }
   const row = e.target.closest(".all-row");
   if (row) openThread(row.dataset.addr);
 });

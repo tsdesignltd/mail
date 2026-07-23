@@ -161,6 +161,15 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px; border-bottom: 1px solid var(--border);
 }
+/* 各差出人行の「既読」ボタン(未読がある行だけ表示、通常は薄く出す) */
+.row-read {
+  flex-shrink: 0; border: 1px solid var(--border); background: transparent;
+  color: var(--muted); cursor: pointer; font-size: 11px; line-height: 1;
+  padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  opacity: 0; transition: opacity 0.12s ease;
+}
+.all-row:hover .row-read { opacity: 0.85; }
+.row-read:hover { opacity: 1; background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .sort-btns { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 .sort-btn {
   border: 1px solid var(--border); background: var(--bg); color: var(--muted);
@@ -176,7 +185,7 @@ body {
 @media (max-width: 1100px) { .all-list { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 700px) { .all-list { grid-template-columns: 1fr; } }
 .all-row {
-  display: grid; grid-template-columns: 34px 30px minmax(0, 1fr) auto;
+  display: grid; grid-template-columns: 34px 30px minmax(0, 1fr) auto auto;
   gap: 8px; align-items: center;
   padding: 6px 4px; cursor: pointer; font-size: 12.5px;
   border-bottom: 1px solid var(--border);

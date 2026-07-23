@@ -580,6 +580,27 @@ class MailStore(object):
         with self.lock:
             return list(self.messages.values())
 
+    def mark_read(self, sender=None, account=None):
+        """キャッシュ上の未読メールを既読にする(ダッシュボードのバッジを消す)。
+        Mail.app の read status は変更しない: Gm の whose 検索は非常に遅く実用的で
+        ないため。MailDeck上の表示だけを既読にする。全体を再取得すると実状態に戻る。
+        sender 指定時はその差出人のみ、account 指定時はそのアカウントのみ対象。"""
+        sender = (sender or "").lower().strip() or None
+        n = 0
+        with self.lock:
+            for m in self.messages.values():
+                if m.get("read"):
+                    continue
+                if sender and m.get("senderAddr") != sender:
+                    continue
+                if account and m.get("account") != account:
+                    continue
+                m["read"] = True
+                n += 1
+        if n:
+            self._save_cache()
+        return n
+
     def get_content(self, key):
         with self.lock:
             msg = self.messages.get(key)
