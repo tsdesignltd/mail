@@ -1,5 +1,5 @@
 -- get_content.applescript <accountName> <mailboxName> <messageId> [rfcMessageId]
--- 1通の本文テキストを取得する。
+-- 1通の本文テキストを取得する。取得した1通は Mail.app 側でも既読にする。
 -- 照合は RFC Message-ID(安定・一意)を優先し、無ければ番号IDにフォールバックする。
 -- 番号IDは Mail の再インデックスで別メールに振り替わることがあり、取り違えの原因になるため。
 -- 注: Gmail の送信済み等 [Gmail] 配下は名前直指定できない(-1728)ためオブジェクト走査で解決。
@@ -43,6 +43,10 @@ on run argv
 			if (count of f2) is 0 then error "message not found"
 			set theMsg to item 1 of f2
 		end if
+		-- MailDeck で本文を開いた=既読。Mail.app 側でも既読にする(この1通のみ・高速)
+		try
+			set read status of theMsg to true
+		end try
 		return content of theMsg
 	end tell
 end run

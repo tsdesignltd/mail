@@ -490,6 +490,26 @@ async function toggleBubbleContent(el) {
   slot.innerHTML = html;
   slot.dataset.html = html;
   slot.dataset.loaded = "1";
+  // 本文を開いた=既読。サーバー側で Mail.app とキャッシュも既読化済み。
+  // 画面はスクロールを乱さないよう、このバブルの未読表示だけ局所的に消す。
+  if (r.content) markBubbleReadLocal(el);
+}
+
+// バブルの未読表示を局所的に消し、state 上のメールも既読にする(全再描画は避ける)
+function markBubbleReadLocal(el) {
+  if (!el.classList.contains("unread")) return;
+  el.classList.remove("unread");
+  const meta = el.querySelector(".b-time");
+  if (meta) meta.textContent = meta.textContent.replace(" ・未読", "");
+  const key = el.dataset.key;
+  const ov = state.overview;
+  if (ov) {
+    for (const t of ov.threads) {
+      for (const m of t.messages) {
+        if (m.key === key) { m.read = true; return; }
+      }
+    }
+  }
 }
 
 $("#pinBtn").addEventListener("click", async () => {

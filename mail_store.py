@@ -608,9 +608,18 @@ class MailStore(object):
             return None
         if msg["source"] == "applescript" and msg.get("id"):
             # RFC Message-ID(安定・一意)を優先。番号IDはフォールバック。
-            return run_osascript("get_content.applescript",
-                                 [msg["account"], msg["mailbox"], msg["id"],
-                                  msg.get("rfcId") or ""], timeout=300)
+            # get_content.applescript は取得した1通を Mail.app 側でも既読にする。
+            content = run_osascript("get_content.applescript",
+                                    [msg["account"], msg["mailbox"], msg["id"],
+                                     msg.get("rfcId") or ""], timeout=300)
+            # 本文を開いた=既読。キャッシュ側も既読にしてバッジを消す。
+            if not msg.get("read"):
+                with self.lock:
+                    m = self.messages.get(key)
+                    if m:
+                        m["read"] = True
+                self._save_cache()
+            return content
         return None  # sqliteモードは本文をDBに持たないため v1 では未対応
 
     def open_in_mail(self, key):
