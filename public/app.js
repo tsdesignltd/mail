@@ -202,7 +202,7 @@ function renderDash() {
 
   const threads = buildThreads(filteredMessages());
 
-  // --- よく使う相手のタイル (最大20件・新着順) ---
+  // --- よく使う相手のタイル (最大40件・新着順) ---
   const favMeta = {};
   for (const f of ov.favorites) favMeta[f.addr] = f;
   let tiles = Object.keys(favMeta)
@@ -220,7 +220,7 @@ function renderDash() {
     .filter((x) => state.account === "all" || x.present)
     .filter(match)
     .sort((a, b) => (b.latest || "").localeCompare(a.latest || ""))
-    .slice(0, 20);
+    .slice(0, 40);
 
   $("#favTiles").innerHTML = tiles.length
     ? tiles.map(tileHtml).join("")

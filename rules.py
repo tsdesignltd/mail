@@ -216,4 +216,4 @@ def auto_favorites(sender_stats, settings):
         if sc >= AUTO_FAVORITE_THRESHOLD and stat.get("count", 0) >= AUTO_FAVORITE_MIN_COUNT:
             result.append({"addr": addr, "score": sc})
     result.sort(key=lambda x: -x["score"])
-    return result[:20]
+    return result[:40]
