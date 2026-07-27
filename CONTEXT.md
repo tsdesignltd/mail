@@ -160,6 +160,31 @@ python3 server.py    # → http://localhost:8765、右上「同期」を押す
 Claude Code で続ける場合は、この `CONTEXT.md` と `README.md` を読ませればフルに
 文脈を復元できる。
 
+### 設置場所と常駐化（重要・2026-07-27）
+- ⚠️ **Dropbox同期の外部ボリューム上で常駐サーバーを動かさないこと**。フォルダアクセスが
+  断続的に切れて `scripts/*.applescript: No such file or directory` で同期が失敗する。
+  **内蔵ディスク（例: `/Users/main/AI_LOCAL/claude/mail`）に clone して動かす**。
+- **ターミナルを閉じても常駐させる**には LaunchAgent を使う（ログイン時自動起動・落ちても再起動）。
+  `~/Library/LaunchAgents/com.tsdesign.maildeck.plist`（PATHは各PCに合わせる）:
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0"><dict>
+    <key>Label</key><string>com.tsdesign.maildeck</string>
+    <key>ProgramArguments</key>
+    <array><string>/usr/bin/python3</string><string>/Users/…/mail/server.py</string></array>
+    <key>WorkingDirectory</key><string>/Users/…/mail</string>
+    <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>/Users/…/maildeck.log</string>
+    <key>StandardErrorPath</key><string>/Users/…/maildeck.log</string>
+  </dict></plist>
+  ```
+  `launchctl load -w ~/Library/LaunchAgents/com.tsdesign.maildeck.plist` で起動、
+  `unload` で停止、`launchctl list | grep maildeck` で確認。
+- ⚠️ **Mail 操作の許可(-1743)**: 初回の同期で「メールを操作しようとしています」を承認する。
+  出ない/拒否済みなら システム設定→プライバシーとセキュリティ→**オートメーション**で有効化。
+  LaunchAgent 経由でも許可は有効に働くことを確認済み。
+
 ---
 
 ## 6. 次にやると良い候補（TODO）
