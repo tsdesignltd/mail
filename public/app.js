@@ -391,6 +391,29 @@ $("#threadReadBtn").addEventListener("click", async () => {
   $$("#bubbles .bubble.unread").forEach((el) => markBubbleReadLocal(el));
   $("#threadReadBtn").classList.add("hidden");
 });
+// スレッドの「すべて削除」: この差出人の受信メールを Mail.app のゴミ箱へ移動(復元可能)
+$("#threadDeleteBtn").addEventListener("click", async () => {
+  const addr = state.activeSender;
+  if (!addr) return;
+  const name = $("#threadName").textContent || addr;
+  if (!confirm(`「${name}」の受信メールをすべて Mail.app のゴミ箱へ移動します。\n(削除ではなくゴミ箱への移動なので、Mail.app から復元できます)\n\nよろしいですか?`)) return;
+  const btn = $("#threadDeleteBtn");
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span>削除中…`;
+  try {
+    const r = await post("/api/delete/sender", { sender: addr });
+    if (r.error) { toast("削除に失敗: " + r.error); return; }
+    toast(`${r.moved} 件をゴミ箱へ移動しました`);
+    await loadOverview();   // キャッシュから除かれた分を反映
+    backToList();           // スレッドは空になったので一覧へ戻る
+  } catch (_) {
+    toast("削除に失敗しました");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+});
 function backToList() {
   $("#threadOverlay").classList.add("hidden");
   state.activeSender = null;
@@ -419,6 +442,9 @@ function renderThread(addr) {
   $("#pinBtn").dataset.action = pinned ? "unpin" : "pin";
   // 未読がある時だけ「すべて既読」ボタンを出す
   $("#threadReadBtn").classList.toggle("hidden", !(t && t.unread));
+  // 受信メールがある時だけ「すべて削除」ボタンを出す
+  const hasReceived = !!(t && t.messages.some((m) => !m.fromMe));
+  $("#threadDeleteBtn").classList.toggle("hidden", !hasReceived);
 
   if (!t) {
     $("#bubbles").innerHTML = `<div class="empty-state"><p>この差出人からの最近のメールはありません</p></div>`;

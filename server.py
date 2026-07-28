@@ -367,6 +367,16 @@ class Handler(BaseHTTPRequestHandler):
                 store.mark_sender_read_async(sender)
             return self._json({"marked": n})
 
+        if u.path == "/api/delete/sender":
+            sender = (body.get("sender") or "").strip()
+            if not sender:
+                return self._json({"error": "sender required"}, 400)
+            try:
+                n = store.move_sender_to_trash(sender)
+            except Exception as e:
+                return self._json({"error": str(e)}, 500)
+            return self._json({"moved": n})
+
         if u.path == "/api/message/open":
             key = body.get("key", "")
             if not key:

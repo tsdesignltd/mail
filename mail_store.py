@@ -630,6 +630,40 @@ class MailStore(object):
         threading.Thread(target=self.mark_sender_read_in_mail,
                          args=(addr,), daemon=True).start()
 
+    def move_sender_to_trash(self, addr):
+        """指定差出人の受信メールを Mail.app のゴミ箱へ移動する(delete=復元可能)。
+        アカウントごとに move_to_trash.applescript を呼び、移動できた分をキャッシュから除く。
+        送信(自分の返信)は対象外。"""
+        addr = (addr or "").lower().strip()
+        if not addr:
+            return 0
+        by_acct = {}  # account -> [(mailbox, id, rfcId, key)]
+        with self.lock:
+            for k, m in self.messages.items():
+                if m.get("fromMe"):
+                    continue
+                if m.get("senderAddr") == addr and m.get("id") is not None and m.get("account"):
+                    by_acct.setdefault(m["account"], []).append(
+                        (m.get("mailbox") or "INBOX", m["id"], m.get("rfcId") or "", k))
+        moved = 0
+        removed_keys = []
+        for acct, items in by_acct.items():
+            args = [acct]
+            for (mbox, mid, rfc, _k) in items:
+                args += [mbox, str(mid), rfc]
+            try:
+                out = run_osascript("move_to_trash.applescript", args, timeout=900)
+                moved += int((out or "0").strip() or 0)
+                removed_keys += [it[3] for it in items]
+            except Exception:
+                pass
+        if removed_keys:
+            with self.lock:
+                for k in removed_keys:
+                    self.messages.pop(k, None)
+            self._save_cache()
+        return moved
+
     def get_content(self, key):
         with self.lock:
             msg = self.messages.get(key)
