@@ -338,10 +338,7 @@ function openThread(addr) {
   state.activeSender = addr;
   $("#threadOverlay").classList.remove("hidden");
   renderThread(addr);
-  // 開いたら自動でこの相手の送受信履歴を同期(バックグラウンド、UIはブロックしない)。
-  // 巨大メールボックスへの再スキャンを避けるため、セッション中は相手ごとに1回だけ。
-  state.syncedSenders = state.syncedSenders || new Set();
-  if (!state.syncedSenders.has(addr)) syncSender(addr, { auto: true });
+  // 開いた時は自動同期しない。「🔄 この相手を同期」ボタンを押した時だけ同期する。
 }
 
 // 差出人個別の同期。received+sent の全履歴を取得して会話を更新する。
