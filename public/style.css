@@ -81,6 +81,12 @@ body {
 }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .sync-status { color: var(--muted); font-size: 12px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* スレッド表示中: 宛先アカウント名(プルダウンの代わり) */
+.thread-acct-label {
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border-radius: 8px; padding: 7px 12px;
+  max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 .btn {
   border: 1px solid var(--border); background: var(--panel); color: var(--text);

@@ -411,9 +411,26 @@ $("#threadDeleteBtn").addEventListener("click", async () => {
     btn.innerHTML = orig;
   }
 });
+// スレッド表示中は、上部のアカウント選択を「宛先アカウント名」表示に切り替える
+function showThreadAccount(accounts) {
+  const sel = $("#accountSelect");
+  const label = $("#threadAccountLabel");
+  if (!accounts || accounts.length === 0) { hideThreadAccount(); return; }
+  const list = accounts.join(" / ");
+  label.textContent = accounts.length === 1 ? `宛先: ${accounts[0]}` : `宛先(${accounts.length}): ${list}`;
+  label.title = "このスレッドの宛先アカウント: " + list;
+  sel.classList.add("hidden");
+  label.classList.remove("hidden");
+}
+function hideThreadAccount() {
+  $("#accountSelect").classList.remove("hidden");
+  $("#threadAccountLabel").classList.add("hidden");
+}
+
 function backToList() {
   $("#threadOverlay").classList.add("hidden");
   state.activeSender = null;
+  hideThreadAccount();   // アカウント選択プルダウンに戻す
   // 受信タブに戻す
   state.tab = "inbox";
   $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "inbox"));
@@ -442,6 +459,8 @@ function renderThread(addr) {
   // 受信メールがある時だけ「すべて削除」ボタンを出す
   const hasReceived = !!(t && t.messages.some((m) => !m.fromMe));
   $("#threadDeleteBtn").classList.toggle("hidden", !hasReceived);
+  // 上部プルダウンを、このスレッドの宛先アカウント表示に切り替える
+  showThreadAccount(t ? [...new Set(t.messages.map((m) => m.account).filter(Boolean))] : []);
 
   if (!t) {
     $("#bubbles").innerHTML = `<div class="empty-state"><p>この差出人からの最近のメールはありません</p></div>`;
@@ -457,7 +476,7 @@ function renderThread(addr) {
       lastDay = day;
     }
     const time = m.date ? new Date(m.date).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : "";
-    const acct = state.account === "all" && m.account ? ` ・ ${esc(m.account)}` : "";
+    const acct = m.account ? ` ・ ${esc(m.account)}` : "";
     const side = m.fromMe ? "from-me" : "from-them";
     const meta = m.fromMe ? `${time} ・自分の返信${acct}`
                           : `${time}${m.read ? "" : " ・未読"}${acct}`;
